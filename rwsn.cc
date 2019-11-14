@@ -46,25 +46,34 @@ std::ofstream rssi_ofs(rssi_file);
 std::ofstream energy_ofs(energy_file);
 std::ofstream pos_ofs(position_file);
 
-const int Width = 100;
-const int Height = 100;
+const int Width = 100;				// [m]
+const int Height = 100;				// [m]
 const int numNodes = 4;
 const int source = numNodes-1;
-const double speed = 1.0;
-const int subtgt=3;
-const Vector waypoint[subtgt] = {{5,5,0},{95,5,0},{95,95,0}};
-//const Vector waypoint[8] = {{5,5,0},{22,5,0},{48,5,0},{22,5,0},{22,48,0},{48,48,0},{22,48,0},{5,48,0}};
+double speed = 1.0;					// [m/s]
+const int subtgt=6;
+//const Vector waypoint[subtgt] = {{5,5,0},{48,5,0},{48,48,0}};
+const Vector waypoint[subtgt] = {{5,5,0},{22,5,0},{48,5,0},{22,5,0},{22,48,5},{48,48,5}};
+//const Vector waypoint[subtgt] = {{5,5,0},{22,5,0},{48,5,0},{22,5,0},{22,48,0},{48,48,0},{22,48,0},{5,48,0}};
 vector<float_t> rssi(numNodes,0.0);
 const int rssi_th = -60;
 const double txPowerDbm = 16;
 
-inline double calcRadian(Vector a,Vector b)
+inline double 
+calcRad_phi(Vector a,Vector b)
 {       
-        return atan2(b.y-a.y,b.x-a.x);
+        return atan2(b.y-a.y, b.x-a.x);
+}
+inline double_t
+calcRad_theta(Vector a, Vector b)
+{
+	return atan2(sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)), b.z-a.z);
 }
 const double referenceLoss = 40.1156;
 const double referenceDistance = 1;
-double calcRxPower(Ptr<Node> c_n,Ptr<Node> t_n){
+double 
+calcRxPower(Ptr<Node> c_n,Ptr<Node> t_n)
+{
 	static Ptr<LogDistancePropagationLossModel> l = CreateObject<LogDistancePropagationLossModel>();
 	static const float path_loss_exponent = l->GetPathLossExponent();
 	Ptr<MobilityModel> a = c_n->GetObject<MobilityModel> ();
@@ -92,29 +101,81 @@ double calcRxPower(Ptr<Node> c_n,Ptr<Node> t_n){
   double rxc = -referenceLoss - pathLossDb;
   return txPowerDbm + rxc;
 }
-void CalcSignalLevel(){
+void MonitorSniffRx0 (Ptr<const Packet> packet,
+                      uint16_t channelFreqMhz,
+                      WifiTxVector txVector,
+                      MpduInfo aMpdu,
+                      SignalNoiseDbm signalNoise)
+{
+	rssi[0] = signalNoise.signal;
+ //  g_samples++;
+  // g_signalDbmAvg += ((signalNoise.signal - g_signalDbmAvg) / g_samples);
+   //g_noiseDbmAvg += ((signalNoise.noise - g_noiseDbmAvg) / g_samples);
+}
+void MonitorSniffRx1 (Ptr<const Packet> packet,
+                      uint16_t channelFreqMhz,
+                      WifiTxVector txVector,
+                      MpduInfo aMpdu,
+                      SignalNoiseDbm signalNoise)
+{
+	rssi[1] = signalNoise.signal;
+   //g_samples++;
+   //g_signalDbmAvg += ((signalNoise.signal - g_signalDbmAvg) / g_samples);
+   //g_noiseDbmAvg += ((signalNoise.noise - g_noiseDbmAvg) / g_samples);
+}
+void MonitorSniffRx2 (Ptr<const Packet> packet,
+                      uint16_t channelFreqMhz,
+                      WifiTxVector txVector,
+                      MpduInfo aMpdu,
+                      SignalNoiseDbm signalNoise)
+{
+	rssi[2] = signalNoise.signal;
+  // g_samples++;
+ //  g_signalDbmAvg += ((signalNoise.signal - g_signalDbmAvg) / g_samples);
+ //  g_noiseDbmAvg += ((signalNoise.noise - g_noiseDbmAvg) / g_samples);
+}
+void MonitorSniffRx3 (Ptr<const Packet> packet,
+                      uint16_t channelFreqMhz,
+                      WifiTxVector txVector,
+                      MpduInfo aMpdu,
+                      SignalNoiseDbm signalNoise)
+{
+	rssi[3] = signalNoise.signal;
+//   g_samples++;
+ //  g_signalDbmAvg += ((signalNoise.signal - g_signalDbmAvg) / g_samples);
+   //g_noiseDbmAvg += ((signalNoise.noise - g_noiseDbmAvg) / g_samples);
+}
+void 
+CalcSignalLevel()
+{
+	
 	for(int i=0;i<source; ++i){
 		rssi[i] = calcRxPower(NodeList::GetNode(i),NodeList::GetNode(i+1));
 		//printf("ID = %d SignalLevel = %.4lf\n",i, rssi[i]);
 	}
+	
 	Simulator::Schedule(Seconds(1.0),&CalcSignalLevel);
 }
 
-inline void SetPosition (Ptr<Node> node, Vector position)
+inline void 
+SetPosition (Ptr<Node> node, Vector position)
 {
   Ptr<MobilityModel> mob = node->GetObject<MobilityModel> ();
   mob->SetPosition (position);
 }
-inline Vector GetPosition (Ptr<Node> node)
+inline Vector 
+GetPosition (Ptr<Node> node)
 {
   Ptr<MobilityModel> mob = node->GetObject<MobilityModel> ();
   return mob->GetPosition ();
 }
 
 vector<queue<Vector>> graph_queue(numNodes);	//0,1:MSN1, 2,3:MSN2, 4,5:MSN3
-void GlobalPathPlanning(){
+void 
+GlobalPathPlanning()
+{
 	int q_id = 0;
-	for (int id = 1;id <= 2;id++) {	//MSNの番号
+	for (int id = 1;id <= numNodes - 2;id++) {	//MSNの番号
 		//前方MSNと後方MSNとの経路計画
 		for (int t_id = id-1;t_id <= id+1;t_id +=2) {
 			GraphSearch gs = GraphSearch();
@@ -124,20 +185,28 @@ void GlobalPathPlanning(){
 			while (1) {
 				Vector pos = gs.popPathPosition();
 				graph_queue[q_id].push(pos);
-				if (pos.x == t_pos.x && pos.y == t_pos.y) break;
+				if (pos.x == t_pos.x && pos.y == t_pos.y && pos.z == pos.z) break;
 			}
 			q_id++;
 		}
 	}
 	Simulator::Schedule(Seconds(10.0),&GlobalPathPlanning);
 }
-Vector UpdatePosition(Vector cur, const Vector tar){
-	double rad = calcRadian(cur, tar);
-	if(abs(GraphSearch::calcDistance(cur, tar)) <= speed){
+Vector 
+UpdatePosition(Vector cur, const Vector tar)
+{
+	if(GraphSearch::calcDistance(cur, tar) <= speed){
 		cur = tar;
 	}else{
-		cur.x += speed*cos(rad);
-		cur.y += speed*sin(rad);
+		double theta = calcRad_theta(cur, tar);
+		double phi = calcRad_phi(cur, tar);
+//		cur.x += speed*cos(phi);
+//		cur.y += speed*sin(phi);
+		
+		cur.x += speed*sin(theta)*cos(phi);
+		cur.y += speed*sin(theta)*sin(phi);
+		cur.z += speed*cos(theta);
+		
 	}
 	if(cur.x < 0) cur.x = 0;
 	if(cur.y < 0) cur.y = 0;
@@ -196,55 +265,45 @@ void DeploymentNode()
 		{
 			cur = UpdatePosition(cur, waypoint[waypoint_id]);
 			if(waypoint_id !=subtgt-1 &&
-			cur.x == waypoint[waypoint_id].x && 
-			cur.y == waypoint[waypoint_id].y) waypoint_id++;
-		}else
-		{
-			//以下、グラフ構造に基づく展開制御の実装
+				cur.x == waypoint[waypoint_id].x && 
+				cur.y == waypoint[waypoint_id].y) 
+				{ waypoint_id++; }
+		}else{
 	/* 
+	 * network topology
 	 * MSN or sink[id-1] --- rssi[id-1] --- MSN[id] ---- rssi[id] ---- MSN or Leader[id+1]
-	 * */
+	 */
 			if(rssi[id] < rssi_th || rssi[id-1] < rssi_th)
 			{
-				int q_id;
-				/*MSNの属する通信経路で一番RSSIが低いのが選ばれる*/
-				if(rssi[id] < rssi[id-1])
-				{
-					int t_id = RetId_NodeToMove(id, id+1);
-					if(id != t_id)
-					{
-						if(id==1)q_id=1;else if(id==2) q_id=3;
-						Vector goal;
-						if(!graph_queue[q_id].empty())
-						{
-							goal = graph_queue[q_id].front();
-							cur = UpdatePosition(cur, goal);
-							if(cur.x==goal.x && cur.y==goal.y) graph_queue[q_id].pop();
-						}else NS_LOG_INFO("graph_queue is empty");
-					}
-				}else
-				{
-					int t_id = RetId_NodeToMove(id, id-1);
-					if(id != t_id)
-					{
-						if(id==1)q_id=0;else if(id==2) q_id=2;
-						Vector goal;
-						if(!graph_queue[q_id].empty())
-						{
-							goal = graph_queue[q_id].front();
-							cur = UpdatePosition(cur, goal);
-							if(cur.x == goal.x && cur.y == goal.y) graph_queue[q_id].pop();
-						}else NS_LOG_INFO("graph_queue is empty");
-					}
+				/*MSNの属する通信経路で一番RSSIが低い方向に移動*/
+				//int t_id;				
+				//graph_node idx is 0,1:MSN1, 2,3:MSN2, 4,5:MSN3
+				int graph_queue_idx;				
+				if(rssi[id] <= rssi[id-1]) {
+					//t_id = id + 1;
+					graph_queue_idx = 2 * id - 1;
+				}else {
+					//t_id = id - 1;
+					if (id == 1) graph_queue_idx = 0;
+					else if (id == 2) graph_queue_idx = 2;
+					else if (id == 3) graph_queue_idx = 4;
 				}
+				//t_id = RetId_NodeToMove(id, t_id);
+				//if(id == t_id) continue;		
+				if(!graph_queue[graph_queue_idx].empty())
+				{
+					Vector goal = graph_queue[graph_queue_idx].front();
+					cur = UpdatePosition(cur, goal);
+					if(cur.x==goal.x && cur.y==goal.y) graph_queue[graph_queue_idx].pop();
+				}else NS_LOG_INFO("graph_queue is empty");
 			}
 			total_dist[id] += GraphSearch::calcDistance(last_dist, cur);
 		}
-		pos_ofs << cur.x<<","<<cur.y<<",";
+		pos_ofs << cur.x<<","<<cur.y<<","<<cur.z<<",";
 		energy_ofs<<remainingEnergyJ[id]<<",";
 		SetPosition(NodeList::GetNode(id),cur);
 		rssi_ofs<<rssi[id-1]<<",";
-		printf("Time = %.2f[s] ID=%d pos : x= %.4f y=%.4f\n",Simulator::Now().GetSeconds(), id, cur.x,cur.y);
+		printf("Time = %.2f[s] ID=%d pos : x= %.4f y=%.4f z=%.4f\n",Simulator::Now().GetSeconds(), id, cur.x, cur.y, cur.z);
 		RemainingEnergy(id);
 	}
 	pos_ofs<<"\n";
@@ -267,8 +326,7 @@ int main (int argc, char *argv[])
 	
 	CommandLine cmd;
 	cmd.AddValue ("verbose", "turn on all WifiNetDevice log components", verbose);
-	//cmd.AddValue("dis","initial distance between node",dis);
-	//cmd.AddValue("speed","speed of moblity node",speed);
+	cmd.AddValue("speed","speed of moblity node",speed);
 	cmd.AddValue("time","end of simulator time",time_s);
 	cmd.AddValue("packetSize_byte","Packet size of OnOffApplication",packetSize_byte);
 	cmd.AddValue("dateRate_kbps","Data rate of OnOffApplication",dateRate_kbps);
@@ -295,11 +353,11 @@ int main (int argc, char *argv[])
 	wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
 //	wifiChannel.SetPropagationDelay("ns3::RandomPropagationDelayModel","Variable",StringValue("ns3::UniformRandomVariable"));
 	wifiPhy.SetErrorRateModel("ns3::YansErrorRateModel"); //wifi;ErrorRateModel CSMA/p2p:RateErrorModel
-//	wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel","Frequency",DoubleValue(2.4e9));//Modified
+	wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel","Frequency",DoubleValue(2.4e9));
 //	wifiChannel.AddPropagationLoss ("ns3::TwoRayGroundPropagationLossModel","MinDistance",DoubleValue(0.1),"HeightAboveZ",DoubleValue(0.5),"Frequency",DoubleValue(2.4e9));
 	wifiChannel.AddPropagationLoss("ns3::LogDistancePropagationLossModel","ReferenceLoss",DoubleValue(40.1156));	//2.4GHz パス損失
 	wifiPhy.SetChannel (wifiChannel.Create ());
-	wifiPhy.Set ("TxGain", DoubleValue (0) );	//等放射
+	wifiPhy.Set ("TxGain", DoubleValue (0) );	//等放射時の利得
 	wifiPhy.Set("RxGain",DoubleValue(0));
 	wifiPhy.Set("ChannelWidth",UintegerValue(22));
 	wifiPhy.Set("ChannelNumber",UintegerValue(6));
@@ -384,7 +442,7 @@ int main (int argc, char *argv[])
 	}
 /******************************************Fin Energy Setting*********************************************/
 	Simulator::Schedule(Seconds(1.0), &DeploymentNode);
-	Simulator::Schedule(Seconds(0.9), &CalcSignalLevel);
+//	Simulator::Schedule(Seconds(0.9), &CalcSignalLevel);
 	Simulator::Schedule(Seconds(10.0),&GlobalPathPlanning);
 	
 	if(animTracing) {
@@ -393,6 +451,11 @@ int main (int argc, char *argv[])
 //		anim.EnableIpv4RouteTracking("scratch/multihop/routingtable-multihop.xml",Seconds(0),Seconds(5),Seconds(0.25));
 	}
 	if(pcapTracing) wifiPhy.EnablePcap("scratch/rwsn/nodeinfo",devices);
+
+	Config::ConnectWithoutContext ("/NodeList/0/DeviceList/*/Phy/MonitorSnifferRx", MakeCallback (&MonitorSniffRx0));
+	Config::ConnectWithoutContext ("/NodeList/1/DeviceList/*/Phy/MonitorSnifferRx", MakeCallback (&MonitorSniffRx1));
+	Config::ConnectWithoutContext ("/NodeList/2/DeviceList/*/Phy/MonitorSnifferRx", MakeCallback (&MonitorSniffRx2));
+	if(numNodes >= 4) Config::ConnectWithoutContext ("/NodeList/0/DeviceList/*/Phy/MonitorSnifferRx", MakeCallback (&MonitorSniffRx3));
 
 	Simulator::Stop(time);
 	Simulator::Run ();

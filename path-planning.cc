@@ -19,13 +19,12 @@ GraphSearch::GraphSearch() :maxsize_node(8)
 	*
 	*	5 ---- 3 ---- 4
 	*
-	*/
+	*
 	addEdge(1, 0, 61.0291);
 	addEdge(1, 2, 66.5648);
 	addEdge(1, 3, 73.1197);
 	addEdge(3, 4, 66.5648);
 	addEdge(3, 5, 61.0291);
-
 	m_nodePos ={
 	{ 0, {5,5,0} },
 	{ 1, {22,5,0} },
@@ -33,6 +32,30 @@ GraphSearch::GraphSearch() :maxsize_node(8)
 	{ 3, {22,48,0} },
 	{ 4, {48,48,0} },
 	{ 5, {5,48,0} }
+	};
+	*/
+	/*
+	* pattern2
+	*
+	*	0 ---- 1 ---- 2
+	*
+	*	      | stair
+	*          |
+	*
+	*		   3 ---- 4
+	*
+	*/
+	addEdge(1, 0, 61.0291);
+	addEdge(1, 2, 66.5648);
+	addEdge(1, 3, 73.1197);
+	addEdge(3, 4, 66.5648);
+	addEdge(3, 5, 61.0291);
+	m_nodePos ={
+	{ 0, {5,5,0} },
+	{ 1, {22,5,0} },
+	{ 2, {48,5,0} },
+	{ 3, {22,48,5} },
+	{ 4, {48,48,5} }
 	};
 	
 	// network topology is line
@@ -105,7 +128,7 @@ GraphSearch::calcRxPower(Vector sta, Vector end)
 inline double
 GraphSearch::calcDistance(Vector sta, Vector end)
 {
-	return sqrt(pow(abs(sta.x - end.x), 2) + pow(abs(sta.y - end.y), 2) + pow(abs(sta.z - end.z), 2));
+	return sqrt((sta.x - end.x)*(sta.x - end.x) + (sta.y - end.y)*(sta.y - end.y) + (sta.z - end.z)*(sta.z - end.z));
 }
 
 //private
