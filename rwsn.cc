@@ -12,6 +12,7 @@
 #include "ns3/flow-monitor-module.h"
 #include "ns3/node-list.h"
 #include "ns3/propagation-loss-model.h"
+#include "node-energy.h"
 #include "path-planning.h"
 //#include "ns3/gnuplot.h"
 #include <stdlib.h>
@@ -55,8 +56,8 @@ const int subtgt=6;
 //const Vector waypoint[subtgt] = {{5,5,0},{48,5,0},{48,48,0}};
 const Vector waypoint[subtgt] = {{5,5,0},{22,5,0},{48,5,0},{22,5,0},{22,48,5},{48,48,5}};
 //const Vector waypoint[subtgt] = {{5,5,0},{22,5,0},{48,5,0},{22,5,0},{22,48,0},{48,48,0},{22,48,0},{5,48,0}};
+vector<NodeEnergy> nodeEnergy;
 vector<float_t> rssi(numNodes,0.0);
-const int rssi_th = -60;
 const double txPowerDbm = 16;
 
 inline double 
@@ -69,11 +70,12 @@ calcRad_theta(Vector a, Vector b)
 {
 	return atan2(sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)), b.z-a.z);
 }
-const double referenceLoss = 40.1156;
-const double referenceDistance = 1;
+
 double 
 calcRxPower(Ptr<Node> c_n,Ptr<Node> t_n)
 {
+	static const double referenceLoss = 40.1156;
+	static const double referenceDistance = 1;
 	static Ptr<LogDistancePropagationLossModel> l = CreateObject<LogDistancePropagationLossModel>();
 	static const float path_loss_exponent = l->GetPathLossExponent();
 	Ptr<MobilityModel> a = c_n->GetObject<MobilityModel> ();
@@ -148,12 +150,10 @@ void MonitorSniffRx3 (Ptr<const Packet> packet,
 void 
 CalcSignalLevel()
 {
-	
 	for(int i=0;i<source; ++i){
 		rssi[i] = calcRxPower(NodeList::GetNode(i),NodeList::GetNode(i+1));
 		//printf("ID = %d SignalLevel = %.4lf\n",i, rssi[i]);
-	}
-	
+	}	
 	Simulator::Schedule(Seconds(1.0),&CalcSignalLevel);
 }
 
@@ -214,6 +214,7 @@ UpdatePosition(Vector cur, const Vector tar)
 	if(cur.y > Height) cur.y = Height;
 	return cur;
 }
+/*
 const int supplyVoltage = 10;
 const long long int initialEnergyJ = 36000;
 vector<float_t> remainingEnergyJ(numNodes,initialEnergyJ);
@@ -232,6 +233,7 @@ double GetTotalEnergyConsumptionJ(const int id){
 void RemainingEnergy(const int id){
 	remainingEnergyJ[id] = initialEnergyJ - GetTotalEnergyConsumptionJ(id);
 }
+* */
 float EvalUniformEnergy(double cur_remEngy, double tar_remEngy){
 	//評価値が大きいほど、両者の量の差も大きくなる
 	/*
@@ -243,26 +245,27 @@ float EvalUniformEnergy(double cur_remEngy, double tar_remEngy){
 int RetId_NodeToMove(const int id, const int tar_id){
 	const float_t eval_val_th = 0.5;
 	if(tar_id == 0 || tar_id == source) return tar_id;
-	float_t eval_val = EvalUniformEnergy(remainingEnergyJ[id], remainingEnergyJ[tar_id]);
+	double cur_remE = nodeEnergy[id].getRemainingEnergyJ();
+	double tar_remE = nodeEnergy[id].getRemainingEnergyJ();
+	float_t eval_val = EvalUniformEnergy(cur_remE, tar_remE);
 	if(eval_val > eval_val_th){
-		if(remainingEnergyJ[id] > remainingEnergyJ[tar_id]) return tar_id;
+		if(cur_remE > tar_remE) return tar_id;
 		else return id;
 	}
 	else return tar_id;
 }
 void DeploymentNode()
 {
-	static short int waypoint_id=0;
 	pos_ofs << Simulator::Now().GetSeconds()<< ",";
 	energy_ofs << Simulator::Now().GetSeconds()<< ",";
 	rssi_ofs<<Simulator::Now().GetSeconds()<< ",";
 	for(int id = source; id > 0; --id)
 	{
-//		printf("ID = %d, remaining energy[J] = %.4lf\n",node.Get(id)->GetId(),remainingEnergyJ[id]);
 		Vector cur = GetPosition(NodeList::GetNode(id));
 		Vector last_dist = {cur.x, cur.y, cur.z};
 		if(id == source)
 		{
+			static short int waypoint_id=0;
 			cur = UpdatePosition(cur, waypoint[waypoint_id]);
 			if(waypoint_id !=subtgt-1 &&
 				cur.x == waypoint[waypoint_id].x && 
@@ -273,38 +276,45 @@ void DeploymentNode()
 	 * network topology
 	 * MSN or sink[id-1] --- rssi[id-1] --- MSN[id] ---- rssi[id] ---- MSN or Leader[id+1]
 	 */
+			static const int rssi_th = -60;
 			if(rssi[id] < rssi_th || rssi[id-1] < rssi_th)
 			{
 				/*MSNの属する通信経路で一番RSSIが低い方向に移動*/
-				//int t_id;				
+				int t_id;				
 				//graph_node idx is 0,1:MSN1, 2,3:MSN2, 4,5:MSN3
 				int graph_queue_idx;				
 				if(rssi[id] <= rssi[id-1]) {
-					//t_id = id + 1;
+					t_id = id + 1;
 					graph_queue_idx = 2 * id - 1;
 				}else {
-					//t_id = id - 1;
+					t_id = id - 1;
 					if (id == 1) graph_queue_idx = 0;
 					else if (id == 2) graph_queue_idx = 2;
 					else if (id == 3) graph_queue_idx = 4;
 				}
 				//t_id = RetId_NodeToMove(id, t_id);
-				//if(id == t_id) continue;		
+				//if(id == t_id) continue;
+				Vector goal;
 				if(!graph_queue[graph_queue_idx].empty())
 				{
-					Vector goal = graph_queue[graph_queue_idx].front();
+					goal = graph_queue[graph_queue_idx].front();
 					cur = UpdatePosition(cur, goal);
 					if(cur.x==goal.x && cur.y==goal.y) graph_queue[graph_queue_idx].pop();
-				}else NS_LOG_INFO("graph_queue is empty");
+				}else {
+					NS_LOG_INFO("graph_queue is empty");
+					goal = GetPosition(NodeList::GetNode(t_id));
+					cur = UpdatePosition(cur, goal);
+				}
 			}
-			total_dist[id] += GraphSearch::calcDistance(last_dist, cur);
+			nodeEnergy[id].sumDist(GraphSearch::calcDistance(last_dist, cur));
+			//total_dist[id] += GraphSearch::calcDistance(last_dist, cur);
 		}
 		pos_ofs << cur.x<<","<<cur.y<<","<<cur.z<<",";
-		energy_ofs<<remainingEnergyJ[id]<<",";
+		energy_ofs<<nodeEnergy[id].getRemainingEnergyJ()<<",";
 		SetPosition(NodeList::GetNode(id),cur);
 		rssi_ofs<<rssi[id-1]<<",";
 		printf("Time = %.2f[s] ID=%d pos : x= %.4f y=%.4f z=%.4f\n",Simulator::Now().GetSeconds(), id, cur.x, cur.y, cur.z);
-		RemainingEnergy(id);
+		//RemainingEnergy(id);
 	}
 	pos_ofs<<"\n";
 	energy_ofs<<"\n";
@@ -428,6 +438,7 @@ int main (int argc, char *argv[])
 /*******************************Fin Application Setting*******************************************************************/
 /********************************Energy Setting***************************************************************************/
 	BasicEnergySourceHelper basicSource;
+	double supplyVoltage = 10, initialEnergyJ = 10000;
 	basicSource.Set("BasicEnergySourceInitialEnergyJ",DoubleValue(initialEnergyJ));
 	basicSource.Set("BasicEnergySupplyVoltageV",DoubleValue(supplyVoltage));
 	EnergySourceContainer sources = basicSource.Install (node);
@@ -437,12 +448,14 @@ int main (int argc, char *argv[])
 	radioEnergy.Set ("RxCurrentA", DoubleValue (3.1));
 	DeviceEnergyModelContainer deviceModels = radioEnergy.Install (devices, sources);
 	for(int i = 0; i < numNodes; i++){
-		basicSourcePtr[i] = DynamicCast<BasicEnergySource> (sources.Get (i));
-		radioModelPtr[i] = basicSourcePtr[i]->FindDeviceEnergyModels("ns3::WifiRadioEnergyModel").Get(0);
+		nodeEnergy.push_back(NodeEnergy(supplyVoltage, initialEnergyJ));
+		Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource> (sources.Get (i));
+		nodeEnergy[i].addBasicSourcePtr(basicSourcePtr);
+		nodeEnergy[i].addRadioModelPtr(basicSourcePtr->FindDeviceEnergyModels("ns3::WifiRadioEnergyModel").Get(0));
 	}
 /******************************************Fin Energy Setting*********************************************/
 	Simulator::Schedule(Seconds(1.0), &DeploymentNode);
-//	Simulator::Schedule(Seconds(0.9), &CalcSignalLevel);
+	Simulator::Schedule(Seconds(0.9), &CalcSignalLevel);
 	Simulator::Schedule(Seconds(10.0),&GlobalPathPlanning);
 	
 	if(animTracing) {
@@ -452,10 +465,10 @@ int main (int argc, char *argv[])
 	}
 	if(pcapTracing) wifiPhy.EnablePcap("scratch/rwsn/nodeinfo",devices);
 
-	Config::ConnectWithoutContext ("/NodeList/0/DeviceList/*/Phy/MonitorSnifferRx", MakeCallback (&MonitorSniffRx0));
-	Config::ConnectWithoutContext ("/NodeList/1/DeviceList/*/Phy/MonitorSnifferRx", MakeCallback (&MonitorSniffRx1));
-	Config::ConnectWithoutContext ("/NodeList/2/DeviceList/*/Phy/MonitorSnifferRx", MakeCallback (&MonitorSniffRx2));
-	if(numNodes >= 4) Config::ConnectWithoutContext ("/NodeList/0/DeviceList/*/Phy/MonitorSnifferRx", MakeCallback (&MonitorSniffRx3));
+//	Config::ConnectWithoutContext ("/NodeList/0/DeviceList/*/Phy/MonitorSnifferRx", MakeCallback (&MonitorSniffRx0));
+//	Config::ConnectWithoutContext ("/NodeList/1/DeviceList/*/Phy/MonitorSnifferRx", MakeCallback (&MonitorSniffRx1));
+//	Config::ConnectWithoutContext ("/NodeList/2/DeviceList/*/Phy/MonitorSnifferRx", MakeCallback (&MonitorSniffRx2));
+//	if(numNodes >= 4) Config::ConnectWithoutContext ("/NodeList/0/DeviceList/*/Phy/MonitorSnifferRx", MakeCallback (&MonitorSniffRx3));
 
 	Simulator::Stop(time);
 	Simulator::Run ();
