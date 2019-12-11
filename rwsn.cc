@@ -70,91 +70,30 @@ calcRad_theta(Vector a, Vector b)
 {
 	return atan2(sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)), b.z-a.z);
 }
-
-double 
-calcRxPower(Ptr<Node> c_n,Ptr<Node> t_n)
+double_t
+propagationLoss(Ptr<PropagationLossModel> model, const double txPowerDbm, const int id, const int id1)
 {
-	static const double referenceLoss = 40.1156;
-	static const double referenceDistance = 1;
-	static Ptr<LogDistancePropagationLossModel> l = CreateObject<LogDistancePropagationLossModel>();
-	static const float path_loss_exponent = l->GetPathLossExponent();
-	Ptr<MobilityModel> a = c_n->GetObject<MobilityModel> ();
-	Ptr<MobilityModel> b = t_n->GetObject<MobilityModel> ();
-	 double distance = a->GetDistanceFrom (b);
-	if (distance <= referenceDistance)
-    {
-      return txPowerDbm - referenceLoss;
-    }
-  /**
-   * The formula is:
-   * rx = 10 * log (Pr0(tx)) - n * 10 * log (d/d0)
-   *
-   * Pr0: rx power at reference distance d0 (W)
-   * d0: reference distance: 1.0 (m)
-   * d: distance (m)
-   * tx: tx power (dB)
-   * rx: dB
-   *
-   * Which, in our case is:
-   *
-   * rx = rx0(tx) - 10 * n * log (d/d0)
-   */
-  double pathLossDb = 10 * path_loss_exponent * std::log10 (distance / referenceDistance);
-  double rxc = -referenceLoss - pathLossDb;
-  return txPowerDbm + rxc;
-}
-void MonitorSniffRx0 (Ptr<const Packet> packet,
-                      uint16_t channelFreqMhz,
-                      WifiTxVector txVector,
-                      MpduInfo aMpdu,
-                      SignalNoiseDbm signalNoise)
-{
-	rssi[0] = signalNoise.signal;
- //  g_samples++;
-  // g_signalDbmAvg += ((signalNoise.signal - g_signalDbmAvg) / g_samples);
-   //g_noiseDbmAvg += ((signalNoise.noise - g_noiseDbmAvg) / g_samples);
-}
-void MonitorSniffRx1 (Ptr<const Packet> packet,
-                      uint16_t channelFreqMhz,
-                      WifiTxVector txVector,
-                      MpduInfo aMpdu,
-                      SignalNoiseDbm signalNoise)
-{
-	rssi[1] = signalNoise.signal;
-   //g_samples++;
-   //g_signalDbmAvg += ((signalNoise.signal - g_signalDbmAvg) / g_samples);
-   //g_noiseDbmAvg += ((signalNoise.noise - g_noiseDbmAvg) / g_samples);
-}
-void MonitorSniffRx2 (Ptr<const Packet> packet,
-                      uint16_t channelFreqMhz,
-                      WifiTxVector txVector,
-                      MpduInfo aMpdu,
-                      SignalNoiseDbm signalNoise)
-{
-	rssi[2] = signalNoise.signal;
-  // g_samples++;
- //  g_signalDbmAvg += ((signalNoise.signal - g_signalDbmAvg) / g_samples);
- //  g_noiseDbmAvg += ((signalNoise.noise - g_noiseDbmAvg) / g_samples);
-}
-void MonitorSniffRx3 (Ptr<const Packet> packet,
-                      uint16_t channelFreqMhz,
-                      WifiTxVector txVector,
-                      MpduInfo aMpdu,
-                      SignalNoiseDbm signalNoise)
-{
-	rssi[3] = signalNoise.signal;
-//   g_samples++;
- //  g_signalDbmAvg += ((signalNoise.signal - g_signalDbmAvg) / g_samples);
-   //g_noiseDbmAvg += ((signalNoise.noise - g_noiseDbmAvg) / g_samples);
+	Ptr<Node> n1 = NodeList::GetNode(id);
+	Ptr<Node> n2 = NodeList::GetNode(id1);
+	Ptr<MobilityModel> a = n1->GetObject<MobilityModel>();
+	Ptr<MobilityModel> b = n2->GetObject<MobilityModel>();
+	return model->CalcRxPower(txPowerDbm, a, b);
 }
 void 
 CalcSignalLevel()
 {
+	rssi_ofs<<Simulator::Now().GetSeconds()<< ",";
 	for(int i=0;i<source; ++i){
-		rssi[i] = calcRxPower(NodeList::GetNode(i),NodeList::GetNode(i+1));
+		Ptr<FriisPropagationLossModel> friis = CreateObject<FriisPropagationLossModel>();
+		Ptr<NakagamiPropagationLossModel> nak = CreateObject<NakagamiPropagationLossModel>();
+		double rxPowerDbm = propagationLoss(friis, txPowerDbm, i, i+1);
+		rxPowerDbm = propagationLoss(nak, rxPowerDbm, i, i+1);
+		rssi[i] = rxPowerDbm;
 		//printf("ID = %d SignalLevel = %.4lf\n",i, rssi[i]);
-	}	
-	Simulator::Schedule(Seconds(1.0),&CalcSignalLevel);
+		rssi_ofs<<rssi[i]<<",";
+	}
+	rssi_ofs<<"\n";
+	Simulator::Schedule(Seconds(0.1),&CalcSignalLevel);
 }
 
 inline void 
@@ -214,26 +153,6 @@ UpdatePosition(Vector cur, const Vector tar)
 	if(cur.y > Height) cur.y = Height;
 	return cur;
 }
-/*
-const int supplyVoltage = 10;
-const long long int initialEnergyJ = 36000;
-vector<float_t> remainingEnergyJ(numNodes,initialEnergyJ);
-std::vector<Ptr<BasicEnergySource>> basicSourcePtr(numNodes);
-vector<Ptr<DeviceEnergyModel>> radioModelPtr(numNodes);
-vector<double> total_dist(numNodes,0);
-double TotalMobilityEnergyJ(const int id){
-	static const float_t current = 0.6 ;	//cotllor + moter [mA]
-	static const float_t e_move = supplyVoltage * current;
-	return e_move*total_dist[id];	//
-}
-double GetTotalEnergyConsumptionJ(const int id){
-	// wifi + rover loss * dist
-	return radioModelPtr[id]->GetTotalEnergyConsumption() + TotalMobilityEnergyJ(id);
-}
-void RemainingEnergy(const int id){
-	remainingEnergyJ[id] = initialEnergyJ - GetTotalEnergyConsumptionJ(id);
-}
-* */
 float EvalUniformEnergy(double cur_remEngy, double tar_remEngy){
 	//評価値が大きいほど、両者の量の差も大きくなる
 	/*
@@ -258,7 +177,6 @@ void DeploymentNode()
 {
 	pos_ofs << Simulator::Now().GetSeconds()<< ",";
 	energy_ofs << Simulator::Now().GetSeconds()<< ",";
-	rssi_ofs<<Simulator::Now().GetSeconds()<< ",";
 	for(int id = source; id > 0; --id)
 	{
 		Vector cur = GetPosition(NodeList::GetNode(id));
@@ -312,13 +230,11 @@ void DeploymentNode()
 		pos_ofs << cur.x<<","<<cur.y<<","<<cur.z<<",";
 		energy_ofs<<nodeEnergy[id].getRemainingEnergyJ()<<",";
 		SetPosition(NodeList::GetNode(id),cur);
-		rssi_ofs<<rssi[id-1]<<",";
 		printf("Time = %.2f[s] ID=%d pos : x= %.4f y=%.4f z=%.4f\n",Simulator::Now().GetSeconds(), id, cur.x, cur.y, cur.z);
 		//RemainingEnergy(id);
 	}
 	pos_ofs<<"\n";
 	energy_ofs<<"\n";
-	rssi_ofs<<"\n";
 	Simulator::Schedule(Seconds(1.0), &DeploymentNode);
 }
 int main (int argc, char *argv[])
@@ -455,7 +371,7 @@ int main (int argc, char *argv[])
 	}
 /******************************************Fin Energy Setting*********************************************/
 	Simulator::Schedule(Seconds(1.0), &DeploymentNode);
-	Simulator::Schedule(Seconds(0.9), &CalcSignalLevel);
+	Simulator::Schedule(Seconds(0.1), &CalcSignalLevel);
 	Simulator::Schedule(Seconds(10.0),&GlobalPathPlanning);
 	
 	if(animTracing) {
