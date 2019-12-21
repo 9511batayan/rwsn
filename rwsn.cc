@@ -51,10 +51,10 @@ const int Width = 100;				// [m]
 const int Height = 100;				// [m]
 const int numNodes = 4;
 const int source = numNodes-1;
-double speed = 1.0;					// [m/s]
-const int subtgt=6;
+double speed = 0.2;					// [m/s]
+const int subtgt=3;
 //const Vector waypoint[subtgt] = {{5,5,0},{48,5,0},{48,48,0}};
-const Vector waypoint[subtgt] = {{5,5,0},{22,5,0},{48,5,0},{22,5,0},{22,48,5},{48,48,5}};
+const Vector waypoint[subtgt] = {{0,0,0},{15,0.5,-7},{15,45,-7},};
 //const Vector waypoint[subtgt] = {{5,5,0},{22,5,0},{48,5,0},{22,5,0},{22,48,0},{48,48,0},{22,48,0},{5,48,0}};
 vector<NodeEnergy> nodeEnergy;
 vector<float_t> rssi(numNodes,0.0);
@@ -69,6 +69,11 @@ inline double_t
 calcRad_theta(Vector a, Vector b)
 {
 	return atan2(sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)), b.z-a.z);
+}
+double_t
+calcDistance(Vector a, Vector b)
+{
+	return sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)+(b.z-a.z)*(b.z-a.z));
 }
 double_t
 propagationLoss(Ptr<PropagationLossModel> model, const double txPowerDbm, const int id, const int id1)
@@ -93,7 +98,7 @@ CalcSignalLevel()
 		rssi_ofs<<rssi[i]<<",";
 	}
 	rssi_ofs<<"\n";
-	Simulator::Schedule(Seconds(0.1),&CalcSignalLevel);
+	Simulator::Schedule(Seconds(0.5),&CalcSignalLevel);
 }
 
 inline void 
@@ -113,19 +118,29 @@ vector<queue<Vector>> graph_queue(numNodes);	//0,1:MSN1, 2,3:MSN2, 4,5:MSN3
 void 
 GlobalPathPlanning()
 {
+	// clear graph queue
+	for(int i=0; i<numNodes;i++){
+		while(!graph_queue[i].empty()){
+			graph_queue[i].pop();
+		}
+	}
 	int q_id = 0;
-	for (int id = 1;id <= numNodes - 2;id++) {	//MSNの番号
-		//前方MSNと後方MSNとの経路計画
-		for (int t_id = id-1;t_id <= id+1;t_id +=2) {
+	for(int id=1;id<source;id++){
+		int t_id = id - 1;
+		for(int cnt = 0; cnt < 2; cnt++){
 			GraphSearch gs = GraphSearch();
 			Vector t_pos = GetPosition(NodeList::GetNode(t_id));
-			gs.pathPlanning(GetPosition(NodeList::GetNode(id)), t_pos);
+			Vector cur_pos = GetPosition(NodeList::GetNode(id));
+			gs.pathPlanning(cur_pos, t_pos);
 			//ゴールまでの最短経路のグラフノードの座標を取得する
+			//cout<<"path planning id -> t_id "<< id << " " << t_id<<endl;
 			while (1) {
 				Vector pos = gs.popPathPosition();
 				graph_queue[q_id].push(pos);
+			//	cout<<"graph queue "<< pos.x << " " << pos.y<<" " << pos.z<<endl;
 				if (pos.x == t_pos.x && pos.y == t_pos.y && pos.z == pos.z) break;
 			}
+			t_id+=2;
 			q_id++;
 		}
 	}
@@ -134,7 +149,7 @@ GlobalPathPlanning()
 Vector 
 UpdatePosition(Vector cur, const Vector tar)
 {
-	if(GraphSearch::calcDistance(cur, tar) <= speed){
+	if(calcDistance(cur, tar) <= speed){
 		cur = tar;
 	}else{
 		double theta = calcRad_theta(cur, tar);
@@ -142,9 +157,9 @@ UpdatePosition(Vector cur, const Vector tar)
 //		cur.x += speed*cos(phi);
 //		cur.y += speed*sin(phi);
 		
-		cur.x += speed*sin(theta)*cos(phi);
-		cur.y += speed*sin(theta)*sin(phi);
-		cur.z += speed*cos(theta);
+		cur.x += speed*sin(theta)*cos(phi)*1;
+		cur.y += speed*sin(theta)*sin(phi)*1;
+		cur.z += speed*cos(theta)*1;
 		
 	}
 	if(cur.x < 0) cur.x = 0;
@@ -194,9 +209,10 @@ void DeploymentNode()
 	 * network topology
 	 * MSN or sink[id-1] --- rssi[id-1] --- MSN[id] ---- rssi[id] ---- MSN or Leader[id+1]
 	 */
-			static const int rssi_th = -60;
+			static const double rssi_th = -65;
 			if(rssi[id] < rssi_th || rssi[id-1] < rssi_th)
 			{
+				//cout<<"do rssi < rssi th"<<endl;
 				/*MSNの属する通信経路で一番RSSIが低い方向に移動*/
 				int t_id;				
 				//graph_node idx is 0,1:MSN1, 2,3:MSN2, 4,5:MSN3
@@ -208,28 +224,36 @@ void DeploymentNode()
 					t_id = id - 1;
 					if (id == 1) graph_queue_idx = 0;
 					else if (id == 2) graph_queue_idx = 2;
-					else if (id == 3) graph_queue_idx = 4;
+//					else if (id == 3) graph_queue_idx = 4;
 				}
-				//t_id = RetId_NodeToMove(id, t_id);
-				//if(id == t_id) continue;
+				t_id = RetId_NodeToMove(id, t_id);
+				if(id == t_id) continue;
+		//		cout<<"id -> t_id "<< id << " "<< t_id<<endl;
 				Vector goal;
-				if(!graph_queue[graph_queue_idx].empty())
+				if(graph_queue[graph_queue_idx].empty())
 				{
-					goal = graph_queue[graph_queue_idx].front();
-					cur = UpdatePosition(cur, goal);
-					if(cur.x==goal.x && cur.y==goal.y) graph_queue[graph_queue_idx].pop();
-				}else {
-					NS_LOG_INFO("graph_queue is empty");
+					cout<<"graph_queue is empty"<<endl;
 					goal = GetPosition(NodeList::GetNode(t_id));
 					cur = UpdatePosition(cur, goal);
+					
+				}
+				else {
+					goal = graph_queue[graph_queue_idx].front();
+					cur = UpdatePosition(cur, goal);
+					if(cur.x==goal.x && cur.y==goal.y && cur.z==goal.z) 
+					{
+				//		printf("ID=%d queue : x= %.4f y=%.4f z=%.4f\\n",id, goal.x, goal.y, goal.z);
+						graph_queue[graph_queue_idx].pop();
+					}
 				}
 			}
-			nodeEnergy[id].sumDist(GraphSearch::calcDistance(last_dist, cur));
 			//total_dist[id] += GraphSearch::calcDistance(last_dist, cur);
 		}
+		nodeEnergy[id].sumDist(calcDistance(last_dist, cur));
 		pos_ofs << cur.x<<","<<cur.y<<","<<cur.z<<",";
 		energy_ofs<<nodeEnergy[id].getRemainingEnergyJ()<<",";
 		SetPosition(NodeList::GetNode(id),cur);
+		
 		printf("Time = %.2f[s] ID=%d pos : x= %.4f y=%.4f z=%.4f\n",Simulator::Now().GetSeconds(), id, cur.x, cur.y, cur.z);
 		//RemainingEnergy(id);
 	}
@@ -242,7 +266,7 @@ int main (int argc, char *argv[])
 	// Ieee802.11g phyMode 36
 	std::string phyMode = "ErpOfdmRate36Mbps";
 	string dateRate_kbps = "100Kib/s";
-	const double dis = 1.0;
+//	const double dis = 1.0;
 	int packetSize_byte = 512;
 	bool verbose = false;
 	bool animTracing = false;
@@ -303,9 +327,11 @@ int main (int argc, char *argv[])
 
 	MobilityHelper mobility;
 	Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
-	for(int i=0;i<numNodes;i++){
-		positionAlloc->Add (Vector (i*dis, i*2, 0.0));
-	}
+	positionAlloc->Add (Vector (-0.6, -0.6, 0.0));
+	positionAlloc->Add (Vector (-0.4, -0.4, 0.0));
+	positionAlloc->Add (Vector (-0.2, 0.2, 0.0));
+	positionAlloc->Add (Vector (0.0, 0.0, 0.0));
+	
 	mobility.SetPositionAllocator (positionAlloc);
 	mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 	mobility.InstallAll();
@@ -354,14 +380,14 @@ int main (int argc, char *argv[])
 /*******************************Fin Application Setting*******************************************************************/
 /********************************Energy Setting***************************************************************************/
 	BasicEnergySourceHelper basicSource;
-	double supplyVoltage = 10, initialEnergyJ = 10000;
+	double supplyVoltage = 15.00, initialEnergyJ = 10000;
 	basicSource.Set("BasicEnergySourceInitialEnergyJ",DoubleValue(initialEnergyJ));
 	basicSource.Set("BasicEnergySupplyVoltageV",DoubleValue(supplyVoltage));
 	EnergySourceContainer sources = basicSource.Install (node);
 	WifiRadioEnergyModelHelper radioEnergy;
 	radioEnergy.Set ("IdleCurrentA", DoubleValue (3.0));
 	radioEnergy.Set ("TxCurrentA", DoubleValue (3.8));
-	radioEnergy.Set ("RxCurrentA", DoubleValue (3.1));
+	radioEnergy.Set ("RxCurrentA", DoubleValue (3.2));
 	DeviceEnergyModelContainer deviceModels = radioEnergy.Install (devices, sources);
 	for(int i = 0; i < numNodes; i++){
 		nodeEnergy.push_back(NodeEnergy(supplyVoltage, initialEnergyJ));
@@ -371,7 +397,7 @@ int main (int argc, char *argv[])
 	}
 /******************************************Fin Energy Setting*********************************************/
 	Simulator::Schedule(Seconds(1.0), &DeploymentNode);
-	Simulator::Schedule(Seconds(0.1), &CalcSignalLevel);
+	Simulator::Schedule(Seconds(0.5), &CalcSignalLevel);
 	Simulator::Schedule(Seconds(10.0),&GlobalPathPlanning);
 	
 	if(animTracing) {

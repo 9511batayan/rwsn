@@ -4,7 +4,7 @@ using namespace ns3;
 // public method
 NodeEnergy::NodeEnergy(const double_t supplyVoltage, const double_t initialEnergyJ) : m_initialEnergyJ(initialEnergyJ)
 {
-	m_const_energy = supplyVoltage * m_initialEnergyJ;
+	m_const_energy = supplyVoltage * 0.05;
 	m_totaldist = 0;
 	m_totalEnergyConsumptionJ = 0;
 }

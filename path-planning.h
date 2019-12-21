@@ -25,15 +25,14 @@ public:
 
 private:
 	map<int, Vector> m_nodePos;
-	int m_numNodes = 6;
-	const int maxsize_node;
 	const double INF = 1e5;
 	vector<GraphNode> m_node;
 	stack<Vector> m_path;
 	int m_nodePos_tail;
 	Vector m_sta, m_goal;
 	int m_startPos_id, m_goalPos_id;
-
+	int maxsize_node;
+	
 	void addPos(Vector p);
 	void connectEdge();
 	void addEdge(const int v, const int u, const double weight);

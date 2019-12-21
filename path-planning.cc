@@ -5,8 +5,7 @@
 */
 #include "path-planning.h"
 using namespace std;
-//public
-GraphSearch::GraphSearch() :maxsize_node(8)
+GraphSearch::GraphSearch() :maxsize_node(5)
 {
 	m_node.resize(maxsize_node);
 	/*
@@ -19,76 +18,28 @@ GraphSearch::GraphSearch() :maxsize_node(8)
 	*
 	*	5 ---- 3 ---- 4
 	*
-	*
-	addEdge(1, 0, 61.0291);
-	addEdge(1, 2, 66.5648);
-	addEdge(1, 3, 73.1197);
-	addEdge(3, 4, 66.5648);
-	addEdge(3, 5, 61.0291);
-	m_nodePos ={
-	{ 0, {5,5,0} },
-	{ 1, {22,5,0} },
-	{ 2, {48,5,0} },
-	{ 3, {22,48,0} },
-	{ 4, {48,48,0} },
-	{ 5, {5,48,0} }
+	*/
+	addEdge(1, 0, 59.4056);
+	addEdge(1, 2, 73.5664);
+
+	m_nodePos = {
+	{ 0, { 0, 0 ,0} },
+	{ 1,{15,0.5,-7} },
+	{ 2,{15,45, -7} }
 	};
-	*/
-	/*
-	* pattern2
-	*
-	*	0 ---- 1 ---- 2
-	*
-	*	      | stair
-	*          |
-	*
-	*		   3 ---- 4
-	*
-	*/
-	addEdge(1, 0, 61.0291);
-	addEdge(1, 2, 66.5648);
-	addEdge(1, 3, 73.1197);
-	addEdge(3, 4, 66.5648);
-	addEdge(3, 5, 61.0291);
-	m_nodePos ={
-	{ 0, {5,5,0} },
-	{ 1, {22,5,0} },
-	{ 2, {48,5,0} },
-	{ 3, {22,48,5} },
-	{ 4, {48,48,5} }
-	};
-	
-	// network topology is line
-	/*
-	addEdge(1, 0, 73.1197);
-	m_nodePos =
-    {
-	{0, {5,5,0} },
-    {1, {48,5,0}}
-    };
-	*/
-	
-	// network topology is right angle
-	/*
-	addEdge(1, 0, 73.1197);
-	addEdge(1, 2, 73.1197);
-	m_nodePos =
-    {
-	{0, {5,5,0} },
-    {1, {48,5,0}},
-    {2, {48,48,0}}
-    };
-	*/
+	//m_nodePosはコンストラクタでまだ処理する
+
 	m_nodePos_tail = m_nodePos.size() - 1;
 }
 GraphSearch::~GraphSearch()
 {
 
 }
-void 
+//public
+void
 GraphSearch::pathPlanning(Vector sta, Vector goal)
 {
-	m_sta = sta; m_goal = goal;
+	m_sta = sta;m_goal = goal;
 	addPos(m_sta);
 	m_startPos_id = m_nodePos_tail;
 	addPos(m_goal);
@@ -97,6 +48,7 @@ GraphSearch::pathPlanning(Vector sta, Vector goal)
 	dijkstra(m_startPos_id, m_goalPos_id);
 	pushPathPosition();
 }
+//Vectorのコンテナを返す方がwhile分で一個ずつ取り出すこともないのでは?検討
 Vector
 GraphSearch::popPathPosition()
 {
@@ -128,9 +80,8 @@ GraphSearch::calcRxPower(Vector sta, Vector end)
 inline double
 GraphSearch::calcDistance(Vector sta, Vector end)
 {
-	return sqrt((sta.x - end.x)*(sta.x - end.x) + (sta.y - end.y)*(sta.y - end.y) + (sta.z - end.z)*(sta.z - end.z));
+	return sqrt(pow(abs(sta.x - end.x), 2) + pow(abs(sta.y - end.y), 2) + pow(end.z-sta.z,2));
 }
-
 //private
 void
 GraphSearch::addPos(Vector p)
@@ -141,34 +92,32 @@ GraphSearch::addPos(Vector p)
 void
 GraphSearch::connectEdge() {
 	vector<double> dist;
-	for (int i = 0;i < (int)m_numNodes;++i)  
-		dist.push_back(calcRxPower(m_nodePos[i], m_nodePos[m_startPos_id]));
-	/*
-	 * Connect the node with minimum distance cost and second distance cost
-	 * from start node to each node
-	 */
-	for(int i = 0; i < 2; ++i)
+	//スタートノード
+	for (int i = 0;i < (int)m_nodePos.size()-2;++i)  dist.push_back(calcDistance(m_nodePos[i], m_nodePos[m_startPos_id]));
 	{
 		auto min_itr = min_element(dist.begin(), dist.end());
-		size_t min_idx = distance(dist.begin(), min_itr);
+		size_t min_idx = distance(dist.begin(), min_itr);	//最小値となる要素
 		addEdge(min_idx, m_startPos_id, dist[min_idx]);
 		dist[min_idx] = INF;
 	}
-	
-	dist.clear();
-	
-	for (int i = 0; i < (int)m_numNodes; ++i)
-		dist.push_back(calcRxPower(m_nodePos[i], m_nodePos[m_goalPos_id]));
-	/*
-	 * Connect the node with minimum distance cost and second distance cost
-	 * from goal node to each node
-	 */
-	for(int i = 0; i < 2; ++i)
 	{
 		auto min_itr = min_element(dist.begin(), dist.end());
-		size_t min_idx = distance(dist.begin(), min_itr);
+		size_t min_idx = distance(dist.begin(), min_itr);	//2番目に最小値となる要素
+		addEdge(min_idx, m_startPos_id, dist[min_idx]);
+	}
+
+	//ゴールノード
+	for (int i = 0;i < (int)m_nodePos.size()-2;++i)  dist[i] = calcDistance(m_nodePos[i], m_nodePos[m_goalPos_id]);
+	{
+		auto min_itr = min_element(dist.begin(), dist.end());
+		size_t min_idx = distance(dist.begin(), min_itr);	//最小値となる要素
 		addEdge(min_idx, m_goalPos_id, dist[min_idx]);
 		dist[min_idx] = INF;
+	}
+	{
+		auto min_itr = min_element(dist.begin(), dist.end());
+		size_t min_idx = distance(dist.begin(), min_itr);	//最小値となる要素
+		addEdge(min_idx, m_goalPos_id, dist[min_idx]);
 	}
 }
 void
@@ -189,8 +138,9 @@ GraphSearch::addEdge(const int v, const int u, const double weight)
 void
 GraphSearch::dijkstra(int start, int end)
 {
+	int nodesize = m_nodePos.size();
 	//変数の初期化
-	for (int i = 0; i < maxsize_node; i++) {
+	for (int i = 0; i < nodesize; i++) {
 		m_node[i].done = false;
 		m_node[i].minCost = -1;
 	}
@@ -198,7 +148,7 @@ GraphSearch::dijkstra(int start, int end)
 	while (1) {
 		int doneNode = -1;
 		//最新の確定したノード番号(-1はNULLのかわり)
-		for (int i = 0; i < maxsize_node; i++) {
+		for (int i = 0; i < nodesize; i++) {
 
 			if (m_node[i].done == true)
 			{//ノードiが確定しているときcontinue
@@ -211,7 +161,7 @@ GraphSearch::dijkstra(int start, int end)
 
 			//確定したノード番号が-1かノードiの現時点の最小コストが小さいとき
 			//確定ノード番号を更新する
-			if (doneNode < 0 || 
+			if (doneNode < 0 ||
 				m_node[i].minCost < m_node[doneNode].minCost) {
 				doneNode = i;
 			}
@@ -224,14 +174,14 @@ GraphSearch::dijkstra(int start, int end)
 
 		for (int i = 0; i < (int)m_node[doneNode].to.size(); i++) {
 			int to = m_node[doneNode].to[i];
-			double cost = m_node[doneNode].minCost + 
+			double cost = m_node[doneNode].minCost +
 				m_node[doneNode].cost[i];
 
 			//ノードtoはまだ訪れていないノード
 			//またはノードtoへより小さいコストの経路だったら
 			//ノードtoの最小コストを更新
-			if (m_node[to].minCost < 0 || 
-				 m_node[to].minCost > cost) {
+			if (m_node[to].minCost < 0 ||
+				m_node[to].minCost > cost) {
 				m_node[to].minCost = cost;
 				m_node[to].from = doneNode;
 			}
