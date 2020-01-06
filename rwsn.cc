@@ -87,6 +87,7 @@ propagationLoss(Ptr<PropagationLossModel> model, const double txPowerDbm, const 
 void 
 CalcSignalLevel()
 {
+	// create code of estimation value without noise
 	rssi_ofs<<Simulator::Now().GetSeconds()<< ",";
 	for(int i=0;i<source; ++i){
 		Ptr<FriisPropagationLossModel> friis = CreateObject<FriisPropagationLossModel>();
@@ -94,7 +95,7 @@ CalcSignalLevel()
 		double rxPowerDbm = propagationLoss(friis, txPowerDbm, i, i+1);
 		rxPowerDbm = propagationLoss(nak, rxPowerDbm, i, i+1);
 		rssi[i] = rxPowerDbm;
-		//printf("ID = %d SignalLevel = %.4lf\n",i, rssi[i]);
+//		printf("From ID = %d Ti ID = %d, SignalLevel = %.4lf\n",i, i+1, rssi[i]);
 		rssi_ofs<<rssi[i]<<",";
 	}
 	rssi_ofs<<"\n";
@@ -195,7 +196,7 @@ void DeploymentNode()
 	for(int id = source; id > 0; --id)
 	{
 		Vector cur = GetPosition(NodeList::GetNode(id));
-		Vector last_dist = {cur.x, cur.y, cur.z};
+	//	Vector last_dist = {cur.x, cur.y, cur.z};
 		if(id == source)
 		{
 			static short int waypoint_id=0;
@@ -209,10 +210,9 @@ void DeploymentNode()
 	 * network topology
 	 * MSN or sink[id-1] --- rssi[id-1] --- MSN[id] ---- rssi[id] ---- MSN or Leader[id+1]
 	 */
-			static const double rssi_th = -65;
+			static const double rssi_th = -55;
 			if(rssi[id] < rssi_th || rssi[id-1] < rssi_th)
 			{
-				//cout<<"do rssi < rssi th"<<endl;
 				/*MSNの属する通信経路で一番RSSIが低い方向に移動*/
 				int t_id;				
 				//graph_node idx is 0,1:MSN1, 2,3:MSN2, 4,5:MSN3
@@ -226,7 +226,7 @@ void DeploymentNode()
 					else if (id == 2) graph_queue_idx = 2;
 //					else if (id == 3) graph_queue_idx = 4;
 				}
-				t_id = RetId_NodeToMove(id, t_id);
+				//t_id = RetId_NodeToMove(id, t_id);
 				if(id == t_id) continue;
 		//		cout<<"id -> t_id "<< id << " "<< t_id<<endl;
 				Vector goal;
@@ -247,9 +247,9 @@ void DeploymentNode()
 					}
 				}
 			}
-			//total_dist[id] += GraphSearch::calcDistance(last_dist, cur);
 		}
-		nodeEnergy[id].sumDist(calcDistance(last_dist, cur));
+		//nodeEnergy[id].sumDist(calcDistance(last_dist, cur));
+		nodeEnergy[id].updateTotalEnergyConsumptionJ(3.32, Simulator::Now().GetSeconds());
 		pos_ofs << cur.x<<","<<cur.y<<","<<cur.z<<",";
 		energy_ofs<<nodeEnergy[id].getRemainingEnergyJ()<<",";
 		SetPosition(NodeList::GetNode(id),cur);
@@ -380,17 +380,18 @@ int main (int argc, char *argv[])
 /*******************************Fin Application Setting*******************************************************************/
 /********************************Energy Setting***************************************************************************/
 	BasicEnergySourceHelper basicSource;
-	double supplyVoltage = 15.00, initialEnergyJ = 10000;
+	double supplyVoltage = 5.60, initialEnergyJ = 10000;
 	basicSource.Set("BasicEnergySourceInitialEnergyJ",DoubleValue(initialEnergyJ));
 	basicSource.Set("BasicEnergySupplyVoltageV",DoubleValue(supplyVoltage));
 	EnergySourceContainer sources = basicSource.Install (node);
 	WifiRadioEnergyModelHelper radioEnergy;
-	radioEnergy.Set ("IdleCurrentA", DoubleValue (3.0));
-	radioEnergy.Set ("TxCurrentA", DoubleValue (3.8));
-	radioEnergy.Set ("RxCurrentA", DoubleValue (3.2));
+	radioEnergy.Set ("IdleCurrentA", DoubleValue (0.6));
+	radioEnergy.Set ("TxCurrentA", DoubleValue (0.85));
+	radioEnergy.Set ("RxCurrentA", DoubleValue (0.65));
 	DeviceEnergyModelContainer deviceModels = radioEnergy.Install (devices, sources);
 	for(int i = 0; i < numNodes; i++){
-		nodeEnergy.push_back(NodeEnergy(supplyVoltage, initialEnergyJ));
+		double moterVoltage = 15.0;
+		nodeEnergy.push_back(NodeEnergy(moterVoltage, initialEnergyJ));
 		Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource> (sources.Get (i));
 		nodeEnergy[i].addBasicSourcePtr(basicSourcePtr);
 		nodeEnergy[i].addRadioModelPtr(basicSourcePtr->FindDeviceEnergyModels("ns3::WifiRadioEnergyModel").Get(0));
@@ -398,8 +399,8 @@ int main (int argc, char *argv[])
 /******************************************Fin Energy Setting*********************************************/
 	Simulator::Schedule(Seconds(1.0), &DeploymentNode);
 	Simulator::Schedule(Seconds(0.5), &CalcSignalLevel);
-	Simulator::Schedule(Seconds(10.0),&GlobalPathPlanning);
-	
+	Simulator::Schedule(Seconds(10.0), &GlobalPathPlanning);
+	//Simulator::Schedule(Seconds(1.0), &CalcRemainingEnergyJ);
 	if(animTracing) {
 		AnimationInterface anim ("scratch/rwsn/rwsn.xml");
  	//	anim.EnablePacketMetadata(true);
