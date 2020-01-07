@@ -2,15 +2,15 @@
 using namespace ns3;
 
 // public method
-NodeEnergy::NodeEnergy(const double supplyVoltage, const double initialEnergyJ) 
+NodeEnergy::NodeEnergy(const double supplyVoltage, const double currentA, const double initialEnergyJ, const double vel) : m_initialEnergyJ(initialEnergyJ)
 {
-//	m_const_energy = supplyVoltage * 3.32 * 1.0 / vel[m/s];		// Consumption[J] per 1[m]
-	m_supplyVoltage = supplyVoltage;
-	m_initialEnergyJ = initialEnergyJ;
-	m_totaldist = 0;
-	m_totaltime = 0.0;
+	m_const_mobEnergy = supplyVoltage * currentA * 1.0 / vel;		// Consumption[J] per meter
+//	m_initialEnergyJ = initialEnergyJ;
+	m_diff_dist = 0;
+	m_diff_time = 0.0;
 	m_totalEnergyConsumptionJ = 0.0;
-	m_sensorEnergyJ = 2.5 * 1;		// Energy constant of LiDER (URG-04LX)
+	m_mobTotalEnergyConsumptionJ = 0.0;
+	m_sensorTotalEnergyConsumptionJ = 0.0;		
 }
 double
 NodeEnergy::getRemainingEnergyJ()
@@ -20,6 +20,20 @@ NodeEnergy::getRemainingEnergyJ()
 		m_remainingEnergyJ = 0;
 	}
 	return m_remainingEnergyJ;
+}
+void 
+NodeEnergy::updateTotalEnergyConsumptionJ(const double time, const double diff_dist)
+{
+	static double last_time = 0.0;
+	m_diff_time = time - last_time;
+	m_diff_dist = diff_dist;
+	totalEnergyConsumptionJ();
+	last_time = time;
+}
+double
+NodeEnergy::getTotalEnergyConsumptionJ() const
+{
+	return m_totalEnergyConsumptionJ;
 }
 void
 NodeEnergy::addBasicSourcePtr(const Ptr<BasicEnergySource> bes)
@@ -31,31 +45,36 @@ NodeEnergy::addRadioModelPtr(const Ptr<DeviceEnergyModel> dem)
 {
 	m_radioModelPtr = dem;
 }
-void 
-NodeEnergy::sumDist(const double dist)
+double
+NodeEnergy::getRadioTotalEnergyConsumptionJ() const 
 {
-	m_totaldist +=dist;
+	return m_radioTotalEnergyConsumptionJ;
 }
-double_t
-NodeEnergy::getRadioTotalEnergyConsumptionJ(){
-	return m_radioModelPtr->GetTotalEnergyConsumption();
-}
-void 
-NodeEnergy::updateTotalEnergyConsumptionJ(const double currentA, const double time)
-{
-	m_currentA = currentA;
-	m_totaltime = time;
-	totalEnergyConsumptionJ();
-}
+
 // private method
 void
 NodeEnergy::totalEnergyConsumptionJ()
 {
-	m_totalEnergyConsumptionJ = m_radioModelPtr->GetTotalEnergyConsumption() + totalMobilityEnergyJ() + m_sensorEnergyJ;
+	m_totalEnergyConsumptionJ = updateTotalRadioEnergyConsumptionJ() + updateTotalMobilityEnergyConsumptionJ() + updateTotalSensorEnergyConsumptionJ();
+}
+double
+NodeEnergy::updateTotalRadioEnergyConsumptionJ()
+{
+	m_radioTotalEnergyConsumptionJ = m_radioModelPtr->GetTotalEnergyConsumption();
+	return m_radioTotalEnergyConsumptionJ;
 }
 double 
-NodeEnergy::totalMobilityEnergyJ()
+NodeEnergy::updateTotalMobilityEnergyConsumptionJ()
 {
-	return m_supplyVoltage * m_currentA * m_totaltime;
-//	return m_totaldist * m_const_energy;
+	m_mobTotalEnergyConsumptionJ += m_const_mobEnergy * m_diff_dist;
+	return m_mobTotalEnergyConsumptionJ;
+//	return m_const_energy * m_totaldist;
+}
+double 
+NodeEnergy::updateTotalSensorEnergyConsumptionJ()
+{
+	// Energy constant of LiDER (URG-04LX)
+	// LiDER is 2.5 W
+	m_sensorTotalEnergyConsumptionJ += 2.5 * m_diff_time;
+	return m_sensorTotalEnergyConsumptionJ;
 }

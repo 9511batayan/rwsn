@@ -196,7 +196,7 @@ void DeploymentNode()
 	for(int id = source; id > 0; --id)
 	{
 		Vector cur = GetPosition(NodeList::GetNode(id));
-	//	Vector last_dist = {cur.x, cur.y, cur.z};
+		Vector last_dist = {cur.x, cur.y, cur.z};
 		if(id == source)
 		{
 			static short int waypoint_id=0;
@@ -228,28 +228,20 @@ void DeploymentNode()
 				}
 				//t_id = RetId_NodeToMove(id, t_id);
 				if(id == t_id) continue;
-		//		cout<<"id -> t_id "<< id << " "<< t_id<<endl;
 				Vector goal;
 				if(graph_queue[graph_queue_idx].empty())
 				{
-					cout<<"graph_queue is empty"<<endl;
 					goal = GetPosition(NodeList::GetNode(t_id));
 					cur = UpdatePosition(cur, goal);
-					
 				}
 				else {
 					goal = graph_queue[graph_queue_idx].front();
 					cur = UpdatePosition(cur, goal);
-					if(cur.x==goal.x && cur.y==goal.y && cur.z==goal.z) 
-					{
-				//		printf("ID=%d queue : x= %.4f y=%.4f z=%.4f\\n",id, goal.x, goal.y, goal.z);
-						graph_queue[graph_queue_idx].pop();
-					}
+					if(cur.x==goal.x && cur.y==goal.y && cur.z==goal.z) { graph_queue[graph_queue_idx].pop(); }
 				}
 			}
 		}
-		//nodeEnergy[id].sumDist(calcDistance(last_dist, cur));
-		nodeEnergy[id].updateTotalEnergyConsumptionJ(3.32, Simulator::Now().GetSeconds());
+		nodeEnergy[id].updateTotalEnergyConsumptionJ(Simulator::Now().GetSeconds(), calcDistance(last_dist, cur));
 		pos_ofs << cur.x<<","<<cur.y<<","<<cur.z<<",";
 		energy_ofs<<nodeEnergy[id].getRemainingEnergyJ()<<",";
 		SetPosition(NodeList::GetNode(id),cur);
@@ -380,7 +372,7 @@ int main (int argc, char *argv[])
 /*******************************Fin Application Setting*******************************************************************/
 /********************************Energy Setting***************************************************************************/
 	BasicEnergySourceHelper basicSource;
-	double supplyVoltage = 5.60, initialEnergyJ = 10000;
+	double supplyVoltage = 5.0, initialEnergyJ = 1e5;
 	basicSource.Set("BasicEnergySourceInitialEnergyJ",DoubleValue(initialEnergyJ));
 	basicSource.Set("BasicEnergySupplyVoltageV",DoubleValue(supplyVoltage));
 	EnergySourceContainer sources = basicSource.Install (node);
@@ -390,8 +382,8 @@ int main (int argc, char *argv[])
 	radioEnergy.Set ("RxCurrentA", DoubleValue (0.65));
 	DeviceEnergyModelContainer deviceModels = radioEnergy.Install (devices, sources);
 	for(int i = 0; i < numNodes; i++){
-		double moterVoltage = 15.0;
-		nodeEnergy.push_back(NodeEnergy(moterVoltage, initialEnergyJ));
+		const double moterVoltage = 15.0; const double moterCurrentA = 3.32;
+		nodeEnergy.push_back(NodeEnergy(moterVoltage, moterCurrentA, initialEnergyJ, speed));
 		Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource> (sources.Get (i));
 		nodeEnergy[i].addBasicSourcePtr(basicSourcePtr);
 		nodeEnergy[i].addRadioModelPtr(basicSourcePtr->FindDeviceEnergyModels("ns3::WifiRadioEnergyModel").Get(0));

@@ -5,29 +5,33 @@ using namespace ns3;
 class NodeEnergy
 {
 	public:
-		NodeEnergy(const double supplyVoltage, const double initialEnergyJ);		// constructor
+		NodeEnergy(const double supplyVoltage, const double currentA, const double initialEnergyJ, const double vel);		// constructor
 		double getRemainingEnergyJ();
-		void sumDist(const double dist);
+		double getTotalEnergyConsumptionJ() const;
+		double getRadioTotalEnergyConsumptionJ() const;
+		void updateTotalEnergyConsumptionJ(const double time, const double diff_dist);
 		void addBasicSourcePtr(const Ptr<BasicEnergySource> bes);
 		void addRadioModelPtr(const Ptr<DeviceEnergyModel> dem);
-		double getRadioTotalEnergyConsumptionJ();
-		void updateTotalEnergyConsumptionJ(const double currentA, const double time);
 		
 	private:
 		// variable
-		double m_initialEnergyJ;
-		double m_supplyVoltage;
-		double m_currentA;
-		float_t m_const_energy;
-		double m_totaldist;
-		double m_totaltime;
+		const double m_initialEnergyJ;
+		//double m_supplyVoltage;
+		//double m_currentA;
+		double m_const_mobEnergy;
+		double m_diff_dist;
+		double m_diff_time;
 		double m_totalEnergyConsumptionJ;
-		double m_sensorEnergyJ;
+		double m_radioTotalEnergyConsumptionJ;
+		double m_mobTotalEnergyConsumptionJ;
+		double m_sensorTotalEnergyConsumptionJ;
 		Ptr<BasicEnergySource> m_basicSourcePtr;
 		Ptr<DeviceEnergyModel> m_radioModelPtr;
 		
 		// method
+		double updateTotalRadioEnergyConsumptionJ();
+		double updateTotalSensorEnergyConsumptionJ();
+		double updateTotalMobilityEnergyConsumptionJ();
 		void totalEnergyConsumptionJ();
-		double totalMobilityEnergyJ();
 };
 #endif
