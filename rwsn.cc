@@ -14,7 +14,6 @@
 #include "ns3/propagation-loss-model.h"
 #include "node-energy.h"
 #include "path-planning.h"
-//#include "ns3/gnuplot.h"
 #include <stdlib.h>
 #include <fstream>
 #include <string>
@@ -24,21 +23,6 @@
 using namespace ns3;
 using namespace std;
 NS_LOG_COMPONENT_DEFINE("rwsn");
-/*
-string fileNameWithNoExtension = "plot-2d";
-string graphicsFileName = fileNameWithNoExtension + ".png";
-string plotFileName = fileNameWithNoExtension + ".plt";
-string plotTitle = "2-D Plot";
-string dataTitle = "2-D Data";
-Gnuplot plot (graphicsFileName);
-plot.SetTitle (plotTitle);
-plot.SetTerminal("png");
-plot.SetLegend("Time [s]","Remaining energy [J]");
-plot.AppendExtra ("set xrange [0:time]");
-Gnuplot2dDataset dataset;
-dataset.SetTitle (dataTitle);
-dataset.SetStyle (Gnuplot2dDataset::LINES_POINTS);
-*/
 
 string rssi_file ="rssi-log.csv";
 string energy_file = "remaining_energy-log.csv";
@@ -47,17 +31,17 @@ std::ofstream rssi_ofs(rssi_file);
 std::ofstream energy_ofs(energy_file);
 std::ofstream pos_ofs(position_file);
 
-const int Width = 100;				// [m]
-const int Height = 100;				// [m]
-const int numNodes = 4;
+const int Width = 50;		// [m]
+const int Height = 50;	// [m]
+const int numNodes = 5;
 const int source = numNodes-1;
-double speed = 0.2;					// [m/s]
+double speed = 0.2;		// [m/s]
 const int subtgt=3;
-//const Vector waypoint[subtgt] = {{5,5,0},{48,5,0},{48,48,0}};
-const Vector waypoint[subtgt] = {{0,0,0},{15,0.5,-7},{15,45,-7},};
+//const Vector waypoint[subtgt] = {{15,0.2,-10},{15,30,-10}};
+const Vector waypoint[subtgt] = {{0,0,0},{15,0.2,-10},{15,30,-10},};
 //const Vector waypoint[subtgt] = {{5,5,0},{22,5,0},{48,5,0},{22,5,0},{22,48,0},{48,48,0},{22,48,0},{5,48,0}};
 vector<NodeEnergy> nodeEnergy;
-vector<float_t> rssi(numNodes,0.0);
+vector<float_t> rssi(source,0.0);
 const double txPowerDbm = 16;
 
 inline double 
@@ -95,11 +79,10 @@ CalcSignalLevel()
 		double rxPowerDbm = propagationLoss(friis, txPowerDbm, i, i+1);
 		rxPowerDbm = propagationLoss(nak, rxPowerDbm, i, i+1);
 		rssi[i] = rxPowerDbm;
-//		printf("From ID = %d Ti ID = %d, SignalLevel = %.4lf\n",i, i+1, rssi[i]);
 		rssi_ofs<<rssi[i]<<",";
 	}
 	rssi_ofs<<"\n";
-	Simulator::Schedule(Seconds(0.5),&CalcSignalLevel);
+	Simulator::Schedule(Seconds(0.2),&CalcSignalLevel);
 }
 
 inline void 
@@ -115,30 +98,29 @@ GetPosition (Ptr<Node> node)
   return mob->GetPosition ();
 }
 
-vector<queue<Vector>> graph_queue(numNodes);	//0,1:MSN1, 2,3:MSN2, 4,5:MSN3
+const int msn = numNodes - 2;
+vector<queue<Vector>> graph_queue(2*msn);	//0,1:MSN1, 2,3:MSN2, 4,5:MSN3
 void 
 GlobalPathPlanning()
 {
+	static const int q_size = graph_queue.size();
 	// clear graph queue
-	for(int i=0; i<numNodes;i++){
+	for(int i=0; i< q_size;i++){
 		while(!graph_queue[i].empty()){
 			graph_queue[i].pop();
 		}
 	}
 	int q_id = 0;
-	for(int id=1;id<source;id++){
+	for(int id=1;id<=msn;id++){
 		int t_id = id - 1;
 		for(int cnt = 0; cnt < 2; cnt++){
 			GraphSearch gs = GraphSearch();
 			Vector t_pos = GetPosition(NodeList::GetNode(t_id));
 			Vector cur_pos = GetPosition(NodeList::GetNode(id));
 			gs.pathPlanning(cur_pos, t_pos);
-			//ゴールまでの最短経路のグラフノードの座標を取得する
-			//cout<<"path planning id -> t_id "<< id << " " << t_id<<endl;
 			while (1) {
 				Vector pos = gs.popPathPosition();
 				graph_queue[q_id].push(pos);
-			//	cout<<"graph queue "<< pos.x << " " << pos.y<<" " << pos.z<<endl;
 				if (pos.x == t_pos.x && pos.y == t_pos.y && pos.z == pos.z) break;
 			}
 			t_id+=2;
@@ -178,7 +160,7 @@ float EvalUniformEnergy(double cur_remEngy, double tar_remEngy){
 	return abs(cur_remEngy - tar_remEngy) / max(cur_remEngy, tar_remEngy);
 }
 int RetId_NodeToMove(const int id, const int tar_id){
-	const float_t eval_val_th = 0.5;
+	const float_t eval_val_th = 0.1200;
 	if(tar_id == 0 || tar_id == source) return tar_id;
 	double cur_remE = nodeEnergy[id].getRemainingEnergyJ();
 	double tar_remE = nodeEnergy[id].getRemainingEnergyJ();
@@ -193,7 +175,7 @@ void DeploymentNode()
 {
 	pos_ofs << Simulator::Now().GetSeconds()<< ",";
 	energy_ofs << Simulator::Now().GetSeconds()<< ",";
-	for(int id = source; id > 0; --id)
+	for(int id = 1; id < numNodes; ++id)
 	{
 		Vector cur = GetPosition(NodeList::GetNode(id));
 		Vector last_dist = {cur.x, cur.y, cur.z};
@@ -210,7 +192,7 @@ void DeploymentNode()
 	 * network topology
 	 * MSN or sink[id-1] --- rssi[id-1] --- MSN[id] ---- rssi[id] ---- MSN or Leader[id+1]
 	 */
-			static const double rssi_th = -55;
+			static const double rssi_th = -50;
 			if(rssi[id] < rssi_th || rssi[id-1] < rssi_th)
 			{
 				/*MSNの属する通信経路で一番RSSIが低い方向に移動*/
@@ -247,7 +229,6 @@ void DeploymentNode()
 		SetPosition(NodeList::GetNode(id),cur);
 		
 		printf("Time = %.2f[s] ID=%d pos : x= %.4f y=%.4f z=%.4f\n",Simulator::Now().GetSeconds(), id, cur.x, cur.y, cur.z);
-		//RemainingEnergy(id);
 	}
 	pos_ofs<<"\n";
 	energy_ofs<<"\n";
@@ -258,7 +239,6 @@ int main (int argc, char *argv[])
 	// Ieee802.11g phyMode 36
 	std::string phyMode = "ErpOfdmRate36Mbps";
 	string dateRate_kbps = "100Kib/s";
-//	const double dis = 1.0;
 	int packetSize_byte = 512;
 	bool verbose = false;
 	bool animTracing = false;
@@ -299,7 +279,7 @@ int main (int argc, char *argv[])
 //	wifiChannel.AddPropagationLoss ("ns3::TwoRayGroundPropagationLossModel","MinDistance",DoubleValue(0.1),"HeightAboveZ",DoubleValue(0.5),"Frequency",DoubleValue(2.4e9));
 	wifiChannel.AddPropagationLoss("ns3::LogDistancePropagationLossModel","ReferenceLoss",DoubleValue(40.1156));	//2.4GHz パス損失
 	wifiPhy.SetChannel (wifiChannel.Create ());
-	wifiPhy.Set ("TxGain", DoubleValue (0) );	//等放射時の利得
+	wifiPhy.Set ("TxGain", DoubleValue (0) );	//　Gain=0 <--等放射の利得
 	wifiPhy.Set("RxGain",DoubleValue(0));
 	wifiPhy.Set("ChannelWidth",UintegerValue(22));
 	wifiPhy.Set("ChannelNumber",UintegerValue(6));
@@ -319,11 +299,11 @@ int main (int argc, char *argv[])
 
 	MobilityHelper mobility;
 	Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
+	positionAlloc->Add (Vector (-0.8, -0.8, 0.0));
 	positionAlloc->Add (Vector (-0.6, -0.6, 0.0));
 	positionAlloc->Add (Vector (-0.4, -0.4, 0.0));
 	positionAlloc->Add (Vector (-0.2, 0.2, 0.0));
 	positionAlloc->Add (Vector (0.0, 0.0, 0.0));
-	
 	mobility.SetPositionAllocator (positionAlloc);
 	mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 	mobility.InstallAll();
@@ -340,16 +320,19 @@ int main (int argc, char *argv[])
 	Ptr<Ipv4> ipv4_node1 = node.Get(1) -> GetObject<Ipv4>();
 	Ptr<Ipv4> ipv4_node2 = node.Get(2) -> GetObject<Ipv4>();
 	Ptr<Ipv4> ipv4_node3 = node.Get(3) -> GetObject<Ipv4>();
+	Ptr<Ipv4> ipv4_node4 = node.Get(4) -> GetObject<Ipv4>();
 
 	Ptr<Ipv4StaticRouting> staticRouting_node0 = staticRoutingHelper.GetStaticRouting(ipv4_node0);		
 	Ptr<Ipv4StaticRouting> staticRouting_node1 = staticRoutingHelper.GetStaticRouting(ipv4_node1);
 	Ptr<Ipv4StaticRouting> staticRouting_node2 = staticRoutingHelper.GetStaticRouting(ipv4_node2);
 	Ptr<Ipv4StaticRouting> staticRouting_node3 = staticRoutingHelper.GetStaticRouting(ipv4_node3);
+	Ptr<Ipv4StaticRouting> staticRouting_node4 = staticRoutingHelper.GetStaticRouting(ipv4_node4);
 
 	staticRouting_node0 -> AddHostRouteTo(Ipv4Address("192.168.127.1"), Ipv4Address("192.168.127.1"),0);
 	staticRouting_node1 -> AddHostRouteTo(Ipv4Address("192.168.127.1"), Ipv4Address("192.168.127.1"),1);
 	staticRouting_node2 -> AddHostRouteTo(Ipv4Address("192.168.127.1"), Ipv4Address("192.168.127.2"),1);
 	staticRouting_node3 -> AddHostRouteTo(Ipv4Address("192.168.127.1"), Ipv4Address("192.168.127.3"),1);
+	staticRouting_node4 -> AddHostRouteTo(Ipv4Address("192.168.127.1"), Ipv4Address("192.168.127.4"),1);
 
 	uint16_t port = 9;
 	string prt;
@@ -381,22 +364,21 @@ int main (int argc, char *argv[])
 	radioEnergy.Set ("TxCurrentA", DoubleValue (0.85));
 	radioEnergy.Set ("RxCurrentA", DoubleValue (0.65));
 	DeviceEnergyModelContainer deviceModels = radioEnergy.Install (devices, sources);
+//	vector<double> after_initialEnergyJ { initialEnergyJ, 94678, 85721.1, 85891.8};
+	const double moterVoltage = 15.0; const double moterCurrentA = 3.32;
 	for(int i = 0; i < numNodes; i++){
-		const double moterVoltage = 15.0; const double moterCurrentA = 3.32;
 		nodeEnergy.push_back(NodeEnergy(moterVoltage, moterCurrentA, initialEnergyJ, speed));
+	//	nodeEnergy.push_back(NodeEnergy(moterVoltage, moterCurrentA, after_initialEnergyJ[i], speed));
 		Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource> (sources.Get (i));
 		nodeEnergy[i].addBasicSourcePtr(basicSourcePtr);
 		nodeEnergy[i].addRadioModelPtr(basicSourcePtr->FindDeviceEnergyModels("ns3::WifiRadioEnergyModel").Get(0));
 	}
 /******************************************Fin Energy Setting*********************************************/
 	Simulator::Schedule(Seconds(1.0), &DeploymentNode);
-	Simulator::Schedule(Seconds(0.5), &CalcSignalLevel);
+	Simulator::Schedule(Seconds(0.2), &CalcSignalLevel);
 	Simulator::Schedule(Seconds(10.0), &GlobalPathPlanning);
-	//Simulator::Schedule(Seconds(1.0), &CalcRemainingEnergyJ);
 	if(animTracing) {
 		AnimationInterface anim ("scratch/rwsn/rwsn.xml");
- 	//	anim.EnablePacketMetadata(true);
-//		anim.EnableIpv4RouteTracking("scratch/multihop/routingtable-multihop.xml",Seconds(0),Seconds(5),Seconds(0.25));
 	}
 	if(pcapTracing) wifiPhy.EnablePcap("scratch/rwsn/nodeinfo",devices);
 

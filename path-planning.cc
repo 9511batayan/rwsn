@@ -5,7 +5,7 @@
 */
 #include "path-planning.h"
 using namespace std;
-GraphSearch::GraphSearch() :maxsize_node(5)
+GraphSearch::GraphSearch() : maxsize_node(5)
 {
 	m_node.resize(maxsize_node);
 	/*
@@ -19,13 +19,13 @@ GraphSearch::GraphSearch() :maxsize_node(5)
 	*	5 ---- 3 ---- 4
 	*
 	*/
-	addEdge(1, 0, 59.4056);
-	addEdge(1, 2, 73.5664);
+	addEdge(1, 0, 18.0289);
+	addEdge(1, 2, 29.8);
 
 	m_nodePos = {
 	{ 0, { 0, 0 ,0} },
-	{ 1,{15,0.5,-7} },
-	{ 2,{15,45, -7} }
+	{ 1,{15,0.2,-10} },
+	{ 2,{15,30, -10} }
 	};
 	//m_nodePosはコンストラクタでまだ処理する
 
