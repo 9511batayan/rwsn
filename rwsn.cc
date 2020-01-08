@@ -75,9 +75,9 @@ CalcSignalLevel()
 	rssi_ofs<<Simulator::Now().GetSeconds()<< ",";
 	for(int i=0;i<source; ++i){
 		Ptr<FriisPropagationLossModel> friis = CreateObject<FriisPropagationLossModel>();
-		Ptr<NakagamiPropagationLossModel> nak = CreateObject<NakagamiPropagationLossModel>();
+		//Ptr<NakagamiPropagationLossModel> nak = CreateObject<NakagamiPropagationLossModel>();
 		double rxPowerDbm = propagationLoss(friis, txPowerDbm, i, i+1);
-		rxPowerDbm = propagationLoss(nak, rxPowerDbm, i, i+1);
+		//rxPowerDbm = propagationLoss(nak, rxPowerDbm, i, i+1);
 		rssi[i] = rxPowerDbm;
 		rssi_ofs<<rssi[i]<<",";
 	}
@@ -196,7 +196,7 @@ void DeploymentNode()
 			if(rssi[id] < rssi_th || rssi[id-1] < rssi_th)
 			{
 				/*MSNの属する通信経路で一番RSSIが低い方向に移動*/
-				int t_id;				
+				int t_id;
 				//graph_node idx is 0,1:MSN1, 2,3:MSN2, 4,5:MSN3
 				int graph_queue_idx;				
 				if(rssi[id] <= rssi[id-1]) {
@@ -206,9 +206,9 @@ void DeploymentNode()
 					t_id = id - 1;
 					if (id == 1) graph_queue_idx = 0;
 					else if (id == 2) graph_queue_idx = 2;
-//					else if (id == 3) graph_queue_idx = 4;
+					else if (id == 3) graph_queue_idx = 4;
 				}
-				//t_id = RetId_NodeToMove(id, t_id);
+				t_id = RetId_NodeToMove(id, t_id);
 				if(id == t_id) continue;
 				Vector goal;
 				if(graph_queue[graph_queue_idx].empty())
@@ -355,7 +355,7 @@ int main (int argc, char *argv[])
 /*******************************Fin Application Setting*******************************************************************/
 /********************************Energy Setting***************************************************************************/
 	BasicEnergySourceHelper basicSource;
-	double supplyVoltage = 5.0, initialEnergyJ = 1e5;
+	double supplyVoltage = 5.0, initialEnergyJ = 1e4;
 	basicSource.Set("BasicEnergySourceInitialEnergyJ",DoubleValue(initialEnergyJ));
 	basicSource.Set("BasicEnergySupplyVoltageV",DoubleValue(supplyVoltage));
 	EnergySourceContainer sources = basicSource.Install (node);
@@ -364,7 +364,7 @@ int main (int argc, char *argv[])
 	radioEnergy.Set ("TxCurrentA", DoubleValue (0.85));
 	radioEnergy.Set ("RxCurrentA", DoubleValue (0.65));
 	DeviceEnergyModelContainer deviceModels = radioEnergy.Install (devices, sources);
-//	vector<double> after_initialEnergyJ { initialEnergyJ, 94678, 85721.1, 85891.8};
+	//vector<double> after_initialEnergyJ { initialEnergyJ, 94058.3, 87755.8, 82453.5, 86889.2};
 	const double moterVoltage = 15.0; const double moterCurrentA = 3.32;
 	for(int i = 0; i < numNodes; i++){
 		nodeEnergy.push_back(NodeEnergy(moterVoltage, moterCurrentA, initialEnergyJ, speed));

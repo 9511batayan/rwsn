@@ -5,7 +5,6 @@ using namespace ns3;
 NodeEnergy::NodeEnergy(const double supplyVoltage, const double currentA, const double initialEnergyJ, const double vel) : m_initialEnergyJ(initialEnergyJ)
 {
 	m_const_mobEnergy = supplyVoltage * currentA * 1.0 / vel;		// Consumption[J] per meter
-//	m_initialEnergyJ = initialEnergyJ;
 	m_diff_dist = 0;
 	m_diff_time = 0.0;
 	m_totalEnergyConsumptionJ = 0.0;

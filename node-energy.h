@@ -16,8 +16,6 @@ class NodeEnergy
 	private:
 		// variable
 		const double m_initialEnergyJ;
-		//double m_supplyVoltage;
-		//double m_currentA;
 		double m_const_mobEnergy;
 		double m_diff_dist;
 		double m_diff_time;
