@@ -47,17 +47,17 @@ const double txPowerDbm = 16;
 inline double 
 calcRad_phi(Vector a,Vector b)
 {       
-        return atan2(b.y-a.y, b.x-a.x);
+        return atan2(b.y - a.y, b.x - a.x);
 }
 inline double_t
 calcRad_theta(Vector a, Vector b)
 {
-	return atan2(sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)), b.z-a.z);
+	return atan2(sqrt((b.x-a.x) * (b.x-a.x) + (b.y-a.y) * (b.y-a.y)), b.z - a.z);
 }
 double_t
 calcDistance(Vector a, Vector b)
 {
-	return sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)+(b.z-a.z)*(b.z-a.z));
+	return sqrt((b.x-a.x) * (b.x-a.x) + (b.y-a.y) * (b.y-a.y) + (b.z-a.z) * (b.z-a.z));
 }
 double_t
 propagationLoss(Ptr<PropagationLossModel> model, const double txPowerDbm, const int id, const int id1)
@@ -75,9 +75,9 @@ CalcSignalLevel()
 	rssi_ofs<<Simulator::Now().GetSeconds()<< ",";
 	for(int i=0;i<source; ++i){
 		Ptr<FriisPropagationLossModel> friis = CreateObject<FriisPropagationLossModel>();
-		//Ptr<NakagamiPropagationLossModel> nak = CreateObject<NakagamiPropagationLossModel>();
+		Ptr<NakagamiPropagationLossModel> nak = CreateObject<NakagamiPropagationLossModel>();
 		double rxPowerDbm = propagationLoss(friis, txPowerDbm, i, i+1);
-		//rxPowerDbm = propagationLoss(nak, rxPowerDbm, i, i+1);
+		rxPowerDbm = propagationLoss(nak, rxPowerDbm, i, i+1);
 		rssi[i] = rxPowerDbm;
 		rssi_ofs<<rssi[i]<<",";
 	}
@@ -103,7 +103,7 @@ vector<queue<Vector>> graph_queue(2*msn);	//0,1:MSN1, 2,3:MSN2, 4,5:MSN3
 void 
 GlobalPathPlanning()
 {
-	static const int q_size = graph_queue.size();
+	const int q_size = graph_queue.size();
 	// clear graph queue
 	for(int i=0; i< q_size;i++){
 		while(!graph_queue[i].empty()){
@@ -111,7 +111,7 @@ GlobalPathPlanning()
 		}
 	}
 	int q_id = 0;
-	for(int id=1;id<=msn;id++){
+	for(int id = 1; id <= msn; id++){
 		int t_id = id - 1;
 		for(int cnt = 0; cnt < 2; cnt++){
 			GraphSearch gs = GraphSearch();
@@ -151,7 +151,8 @@ UpdatePosition(Vector cur, const Vector tar)
 	if(cur.y > Height) cur.y = Height;
 	return cur;
 }
-float EvalUniformEnergy(double cur_remEngy, double tar_remEngy){
+float EvalUniformEnergy(double cur_remEngy, double tar_remEngy)
+{
 	//評価値が大きいほど、両者の量の差も大きくなる
 	/*
 	 * cur_remEngy = 100, tar_remEngy = 0 => abs(100 - 0) / max(100,0) = 1
@@ -159,17 +160,22 @@ float EvalUniformEnergy(double cur_remEngy, double tar_remEngy){
 	 */
 	return abs(cur_remEngy - tar_remEngy) / max(cur_remEngy, tar_remEngy);
 }
-int RetId_NodeToMove(const int id, const int tar_id){
-	const float_t eval_val_th = 0.1200;
+int RetId_NodeToMove(const int id, const int tar_id)
+{
+	static const float_t eval_val_th = 0.1000;
 	if(tar_id == 0 || tar_id == source) return tar_id;
 	double cur_remE = nodeEnergy[id].getRemainingEnergyJ();
-	double tar_remE = nodeEnergy[id].getRemainingEnergyJ();
+	double tar_remE = nodeEnergy[tar_id].getRemainingEnergyJ();
 	float_t eval_val = EvalUniformEnergy(cur_remE, tar_remE);
 	if(eval_val > eval_val_th){
+		cout<< "eval_val is evaluated"<<endl;
 		if(cur_remE > tar_remE) return tar_id;
 		else return id;
 	}
-	else return tar_id;
+	else {
+		cout<<"Not evaluated"<<endl;
+		return tar_id;
+	}
 }
 void DeploymentNode()
 {
@@ -181,12 +187,11 @@ void DeploymentNode()
 		Vector last_dist = {cur.x, cur.y, cur.z};
 		if(id == source)
 		{
-			static short int waypoint_id=0;
+			static short int waypoint_id = 0;
 			cur = UpdatePosition(cur, waypoint[waypoint_id]);
-			if(waypoint_id !=subtgt-1 &&
+			if(waypoint_id != subtgt-1 &&
 				cur.x == waypoint[waypoint_id].x && 
-				cur.y == waypoint[waypoint_id].y) 
-				{ waypoint_id++; }
+				cur.y == waypoint[waypoint_id].y) { waypoint_id++; }
 		}else{
 	/* 
 	 * network topology
@@ -197,9 +202,8 @@ void DeploymentNode()
 			{
 				/*MSNの属する通信経路で一番RSSIが低い方向に移動*/
 				int t_id;
-				//graph_node idx is 0,1:MSN1, 2,3:MSN2, 4,5:MSN3
-				int graph_queue_idx;				
-				if(rssi[id] <= rssi[id-1]) {
+				int graph_queue_idx;	//graph_queue_idx {0,1:MSN1, 2,3:MSN2, 4,5:MSN3}				
+				if(rssi[id] < rssi[id - 1]) {
 					t_id = id + 1;
 					graph_queue_idx = 2 * id - 1;
 				}else {
@@ -209,15 +213,14 @@ void DeploymentNode()
 					else if (id == 3) graph_queue_idx = 4;
 				}
 				t_id = RetId_NodeToMove(id, t_id);
-				if(id == t_id) continue;
-				Vector goal;
-				if(graph_queue[graph_queue_idx].empty())
-				{
-					goal = GetPosition(NodeList::GetNode(t_id));
-					cur = UpdatePosition(cur, goal);
-				}
-				else {
-					goal = graph_queue[graph_queue_idx].front();
+				if(id != t_id) {
+					Vector goal;
+					if(graph_queue[graph_queue_idx].empty())
+					{
+						goal = GetPosition(NodeList::GetNode(t_id));
+					}else {
+						goal = graph_queue[graph_queue_idx].front();
+					}
 					cur = UpdatePosition(cur, goal);
 					if(cur.x==goal.x && cur.y==goal.y && cur.z==goal.z) { graph_queue[graph_queue_idx].pop(); }
 				}
@@ -226,7 +229,7 @@ void DeploymentNode()
 		nodeEnergy[id].updateTotalEnergyConsumptionJ(Simulator::Now().GetSeconds(), calcDistance(last_dist, cur));
 		pos_ofs << cur.x<<","<<cur.y<<","<<cur.z<<",";
 		energy_ofs<<nodeEnergy[id].getRemainingEnergyJ()<<",";
-		SetPosition(NodeList::GetNode(id),cur);
+		SetPosition(NodeList::GetNode(id), cur);
 		
 		printf("Time = %.2f[s] ID=%d pos : x= %.4f y=%.4f z=%.4f\n",Simulator::Now().GetSeconds(), id, cur.x, cur.y, cur.z);
 	}
@@ -355,7 +358,7 @@ int main (int argc, char *argv[])
 /*******************************Fin Application Setting*******************************************************************/
 /********************************Energy Setting***************************************************************************/
 	BasicEnergySourceHelper basicSource;
-	double supplyVoltage = 5.0, initialEnergyJ = 1e4;
+	double supplyVoltage = 5.0, initialEnergyJ = 1e5;
 	basicSource.Set("BasicEnergySourceInitialEnergyJ",DoubleValue(initialEnergyJ));
 	basicSource.Set("BasicEnergySupplyVoltageV",DoubleValue(supplyVoltage));
 	EnergySourceContainer sources = basicSource.Install (node);
@@ -364,11 +367,11 @@ int main (int argc, char *argv[])
 	radioEnergy.Set ("TxCurrentA", DoubleValue (0.85));
 	radioEnergy.Set ("RxCurrentA", DoubleValue (0.65));
 	DeviceEnergyModelContainer deviceModels = radioEnergy.Install (devices, sources);
-	//vector<double> after_initialEnergyJ { initialEnergyJ, 94058.3, 87755.8, 82453.5, 86889.2};
+	vector<double> after_initialEnergyJ { 0, 93859.1, 87755.8, 82385.7, 86889.2};
 	const double moterVoltage = 15.0; const double moterCurrentA = 3.32;
 	for(int i = 0; i < numNodes; i++){
-		nodeEnergy.push_back(NodeEnergy(moterVoltage, moterCurrentA, initialEnergyJ, speed));
-	//	nodeEnergy.push_back(NodeEnergy(moterVoltage, moterCurrentA, after_initialEnergyJ[i], speed));
+	//	nodeEnergy.push_back(NodeEnergy(moterVoltage, moterCurrentA, initialEnergyJ, speed));
+		nodeEnergy.push_back(NodeEnergy(moterVoltage, moterCurrentA, after_initialEnergyJ[i], speed));
 		Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource> (sources.Get (i));
 		nodeEnergy[i].addBasicSourcePtr(basicSourcePtr);
 		nodeEnergy[i].addRadioModelPtr(basicSourcePtr->FindDeviceEnergyModels("ns3::WifiRadioEnergyModel").Get(0));
