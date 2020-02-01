@@ -162,7 +162,7 @@ float EvalUniformEnergy(double cur_remEngy, double tar_remEngy)
 }
 int RetId_NodeToMove(const int id, const int tar_id)
 {
-	static const float_t eval_val_th = 0.1000;
+	static const float_t eval_val_th = 0.040;
 	if(tar_id == 0 || tar_id == source) return tar_id;
 	double cur_remE = nodeEnergy[id].getRemainingEnergyJ();
 	double tar_remE = nodeEnergy[tar_id].getRemainingEnergyJ();
@@ -212,7 +212,7 @@ void DeploymentNode()
 					else if (id == 2) graph_queue_idx = 2;
 					else if (id == 3) graph_queue_idx = 4;
 				}
-				t_id = RetId_NodeToMove(id, t_id);
+				//t_id = RetId_NodeToMove(id, t_id);
 				if(id != t_id) {
 					Vector goal;
 					if(graph_queue[graph_queue_idx].empty())
@@ -367,11 +367,9 @@ int main (int argc, char *argv[])
 	radioEnergy.Set ("TxCurrentA", DoubleValue (0.85));
 	radioEnergy.Set ("RxCurrentA", DoubleValue (0.65));
 	DeviceEnergyModelContainer deviceModels = radioEnergy.Install (devices, sources);
-	vector<double> after_initialEnergyJ { 0, 93859.1, 87755.8, 82385.7, 86889.2};
 	const double moterVoltage = 15.0; const double moterCurrentA = 3.32;
 	for(int i = 0; i < numNodes; i++){
-	//	nodeEnergy.push_back(NodeEnergy(moterVoltage, moterCurrentA, initialEnergyJ, speed));
-		nodeEnergy.push_back(NodeEnergy(moterVoltage, moterCurrentA, after_initialEnergyJ[i], speed));
+		nodeEnergy.push_back(NodeEnergy(moterVoltage, moterCurrentA, initialEnergyJ, speed));
 		Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource> (sources.Get (i));
 		nodeEnergy[i].addBasicSourcePtr(basicSourcePtr);
 		nodeEnergy[i].addRadioModelPtr(basicSourcePtr->FindDeviceEnergyModels("ns3::WifiRadioEnergyModel").Get(0));
