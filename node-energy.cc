@@ -67,7 +67,6 @@ NodeEnergy::updateTotalMobilityEnergyConsumptionJ()
 {
 	m_mobTotalEnergyConsumptionJ += m_const_mobEnergy * m_diff_dist;
 	return m_mobTotalEnergyConsumptionJ;
-//	return m_const_energy * m_totaldist;
 }
 double 
 NodeEnergy::updateTotalSensorEnergyConsumptionJ()

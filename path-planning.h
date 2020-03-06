@@ -20,7 +20,6 @@ public:
 	Vector popPathPosition();
 	double costMinPath()const;
 	void clearGraphInfo();
-	static double calcRxPower(Vector sta, Vector end);
 	static double calcDistance(Vector sta, Vector end);
 
 private:

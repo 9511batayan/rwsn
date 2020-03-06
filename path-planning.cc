@@ -8,17 +8,7 @@ using namespace std;
 GraphSearch::GraphSearch() : maxsize_node(5)
 {
 	m_node.resize(maxsize_node);
-	/*
-	* pattern1
-	*
-	*	0 ---- 1 ---- 2
-	*
-	*	       |
-	*          |
-	*
-	*	5 ---- 3 ---- 4
-	*
-	*/
+
 	addEdge(1, 0, 18.0289);
 	addEdge(1, 2, 29.8);
 
@@ -27,28 +17,23 @@ GraphSearch::GraphSearch() : maxsize_node(5)
 	{ 1,{15,0.2,-10} },
 	{ 2,{15,30, -10} }
 	};
-	//m_nodePosはコンストラクタでまだ処理する
-
 	m_nodePos_tail = m_nodePos.size() - 1;
 }
 GraphSearch::~GraphSearch()
 {
-
 }
 //public
 void
 GraphSearch::pathPlanning(Vector sta, Vector goal)
 {
-	m_sta = sta;m_goal = goal;
-	addPos(m_sta);
+	addPos(sta);
 	m_startPos_id = m_nodePos_tail;
-	addPos(m_goal);
+	addPos(goal);
 	m_goalPos_id = m_nodePos_tail;
 	connectEdge();
 	dijkstra(m_startPos_id, m_goalPos_id);
 	pushPathPosition();
 }
-//Vectorのコンテナを返す方がwhile分で一個ずつ取り出すこともないのでは?検討
 Vector
 GraphSearch::popPathPosition()
 {
@@ -64,18 +49,6 @@ GraphSearch::costMinPath()const
 void
 GraphSearch::clearGraphInfo()
 {
-}
-double
-GraphSearch::calcRxPower(Vector sta, Vector end)
-{
-	static const double txPowerDbm = 16;
-	static const double refDist = 1;
-	static const double exponent = 3.0;
-	static const double refLoss = 40.1156;
-	double dist = calcDistance(sta, end);
-	double pathLossDb = 10 * exponent*log10(dist / refDist);
-	double rxc = -refLoss - pathLossDb;
-	return abs(txPowerDbm + rxc);
 }
 inline double
 GraphSearch::calcDistance(Vector sta, Vector end)
@@ -116,7 +89,7 @@ GraphSearch::connectEdge() {
 	}
 	{
 		auto min_itr = min_element(dist.begin(), dist.end());
-		size_t min_idx = distance(dist.begin(), min_itr);	//最小値となる要素
+		size_t min_idx = distance(dist.begin(), min_itr);	//2番目に最小値となる要素
 		addEdge(min_idx, m_goalPos_id, dist[min_idx]);
 	}
 }
